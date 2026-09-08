@@ -1,0 +1,9 @@
+{
+  "id": "xu-homepages",
+  "name": "XU Homepages",
+  "version": "1.0.0",
+  "minAppVersion": "1.4.0",
+  "description": "Open multiple notes as a startup layout, route homepages by weekday and time ranges, and restore the last session.",
+  "author": "旭说",
+  "isDesktopOnly": false
+}
