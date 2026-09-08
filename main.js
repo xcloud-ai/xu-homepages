@@ -294,15 +294,23 @@ class XuHomepages extends Plugin {
     });
 
     // 会话采集：layout-change 防抖记录当前打开的 markdown 文件
-    this.registerEvent(
-      this.app.workspace.on('layout-change', () => {
-        if (this.sessionDebounceTimer) clearTimeout(this.sessionDebounceTimer);
-        this.sessionDebounceTimer = setTimeout(() => {
-          this.sessionDebounceTimer = null;
-          this.captureSession();
-        }, SESSION_DEBOUNCE_MS);
-      })
-    );
+    // 官方 load-time 指南：启动期事件注册放 onLayoutReady，不参与启动事件风暴
+    this.app.workspace.onLayoutReady(() => {
+      this.registerEvent(
+        this.app.workspace.on('layout-change', () => {
+          if (this.sessionDebounceTimer) clearTimeout(this.sessionDebounceTimer);
+          this.sessionDebounceTimer = setTimeout(() => {
+            this.sessionDebounceTimer = null;
+            this.captureSession();
+          }, SESSION_DEBOUNCE_MS);
+        })
+      );
+      // 启动布局（含组合打开）多发生在注册之前，布局就绪后补一次初始快照
+      this.sessionDebounceTimer = setTimeout(() => {
+        this.sessionDebounceTimer = null;
+        this.captureSession();
+      }, SESSION_DEBOUNCE_MS);
+    });
 
     if (this.isHomepageEnabled()) {
       console.warn(LOG_PREFIX, this.t('conflict_warning'));
