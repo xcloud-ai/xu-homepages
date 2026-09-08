@@ -30,7 +30,7 @@ const I18N = {
     setting_language: '界面语言',
     setting_language_desc: '切换中文 / English',
     setting_restore_session: '恢复上次关闭的所有文件',
-    setting_restore_session_desc: '开启后，启动时重新打开上次关闭的全部文件（优先于主页）；默认关闭',
+    setting_restore_session_desc: '开启后，启动时重新打开上次关闭的全部文件（优先于主页）；关闭时启动只打开主页，其余文件全部不打开；默认关闭',
     setting_new_tab: '新标签页打开主页',
     setting_new_tab_desc: '开启后，点击标签栏「+」或 Ctrl+T 新建标签页时，直接打开主页（单主页；未配置则用默认组合第一项）；默认关闭',
     section_single: '单主页',
@@ -101,7 +101,7 @@ const I18N = {
     setting_language: 'Language',
     setting_language_desc: 'Switch Chinese / English',
     setting_restore_session: 'Restore all files closed last time',
-    setting_restore_session_desc: 'When enabled, reopen all files from the last session on startup (takes priority over homepages); off by default',
+    setting_restore_session_desc: 'When enabled, reopen all files from the last session on startup (takes priority over homepages); when off, only the homepage opens at startup; off by default',
     setting_new_tab: 'New tab opens homepage',
     setting_new_tab_desc: 'When enabled, clicking the "+" button or pressing Ctrl+T opens the homepage (single homepage; fallback: first item of the default profile); off by default',
     section_single: 'Single homepage',
@@ -461,18 +461,48 @@ class XuHomepages extends Plugin {
   async openStartup() {
     if (!this.settings) return false; // 补丁先于设置加载时兜底
     if (this.hasUrlParams()) return false; // obsidian:// 带打开参数时不抢启动
+    this.xuLpStartupLeaves = new Set(); // 记录本次启动打开的 leaf，供清屏保留
     if (this.settings.restoreLastSession) {
+      await this.closeMainLeaves(null); // 先清空主区，避免与原生恢复的文件重复
       return await this.restoreSession(true);
     }
     const single = this.settings.singleHomepage;
     if (single && single.enabled && single.target) {
-      return await this.openSingle(true);
+      const ok = await this.openSingle(true);
+      if (ok) await this.closeMainLeaves(this.xuLpStartupLeaves); // 只留主页，其余全关
+      return ok;
     }
     if (this.settings.profileMode && this.settings.profileMode.enabled) {
       const profile = this.resolveProfile();
-      if (profile) return await this.openProfile(profile, true);
+      if (profile) {
+        const ok = await this.openProfile(profile, true);
+        if (ok) await this.closeMainLeaves(this.xuLpStartupLeaves);
+        return ok;
+      }
     }
     return false; // 未配置 → 交还原版行为
+  }
+
+  /* 收集主区（rootSplit）所有 leaf，不触碰左右侧栏 */
+  collectMainLeaves(node = this.app.workspace.rootSplit, out = []) {
+    if (!node) return out;
+    if (Array.isArray(node.children)) for (const c of node.children) this.collectMainLeaves(c, out);
+    else out.push(node);
+    return out;
+  }
+
+  /* 启动清屏：keep=null 全关；传 Set 时保留本次启动打开的主页 leaf */
+  closeMainLeaves(keep) {
+    const keepSet = keep instanceof Set ? keep : null;
+    for (const leaf of this.collectMainLeaves()) {
+      if (keepSet && keepSet.has(leaf)) continue;
+      try {
+        if (leaf.getViewState && leaf.getViewState().pinned) leaf.setPinned(false);
+        leaf.detach();
+      } catch (e) {
+        console.warn(LOG_PREFIX, 'skip closing leaf', e);
+      }
+    }
   }
 
   hasUrlParams() {
@@ -583,6 +613,7 @@ class XuHomepages extends Plugin {
       leaf = this.app.workspace.getLeaf(mode === 'replace' ? false : mode);
     }
     await leaf.openFile(af);
+    if (this.xuLpStartupLeaves) this.xuLpStartupLeaves.add(leaf); // 启动清屏时保留
     return true;
   }
 
@@ -738,9 +769,11 @@ class XuHomepagesSettingTab extends PluginSettingTab {
 
     // ===== 组合主页 =====
     containerEl.createEl('h3', { text: this.t('section_profile') });
-    const usage = containerEl.createDiv('xu-homepages-hint');
-    usage.createSpan({ text: this.t('profile_usage_hint') });
-    usage.createEl('a', { text: REPO_URL, href: REPO_URL });
+    if (plugin.settings.profileMode.enabled) {
+      const usage = containerEl.createDiv('xu-homepages-hint');
+      usage.createSpan({ text: this.t('profile_usage_hint') });
+      usage.createEl('a', { text: REPO_URL, href: REPO_URL });
+    }
     new Setting(containerEl)
       .setName(this.t('profile_enable'))
       .setDesc(this.t('profile_enable_desc'))
@@ -756,7 +789,8 @@ class XuHomepagesSettingTab extends PluginSettingTab {
             this.display();
           }));
 
-    // ===== 启动组合 =====
+    // ===== 启动组合 / 条件规则（仅组合主页开启时显示，保持设置页简洁）=====
+    if (plugin.settings.profileMode.enabled) {
     containerEl.createEl('h3', { text: this.t('section_profiles') });
     const profilesDesc = containerEl.createDiv('setting-item-description');
     profilesDesc.setText(this.t('section_profiles_desc'));
@@ -800,6 +834,8 @@ class XuHomepagesSettingTab extends PluginSettingTab {
         await plugin.saveSettings();
         this.display();
       }));
+
+    } // end 组合主页配置区（profileMode.enabled）
 
     const tip = containerEl.createEl('div');
     tip.addClass('xu-homepages-hint');
