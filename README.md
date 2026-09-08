@@ -1,49 +1,49 @@
-# XU Homepages
+# XU Homepages 启动台
 
 > [!NOTE] 中文说明
 > **启动台** — 启动时按布局组合打开多个固定笔记，支持按星期/时间段智能路由首页，并可恢复上次关闭的所有文件
 
 启动时按布局组合打开多个笔记，支持按星期与时间段智能路由主页，并可恢复上次关闭的会话。
 
-## Installation / 安装
+English documentation: [README.en.md](./README.en.md)
 
-1. Open Obsidian Settings -> Community Plugins
-2. Search "XU Homepages" and install, then enable
-3. 打开 Obsidian 设置 -> 第三方插件, 搜索 "XU Homepages" 安装并启用
+## 安装
 
-Manual install / 手动安装:
-1. Download `main.js`, `manifest.json`, `styles.css` from the latest release
-2. Put them into `<vault>/.obsidian/plugins/xu-homepages/`
+1. 打开 Obsidian 设置 → 第三方插件
+2. 搜索 "XU Homepages" 安装并启用
 
-## Usage / 使用方法
+手动安装：
 
-1. Open Settings -> XU Homepages / 打开 设置 -> 启动台
-2. Pick a startup behavior, create a profile, add notes / 选择启动行为，新建启动组合并添加笔记
-3. Optional: add weekday/time rules for smart routing / 可选：添加条件规则按星期/时间段智能路由
-4. `Ctrl+P` -> "Launchpad" for manual triggers / `Ctrl+P` 搜索「启动台」手动触发
+1. 从最新 Release 下载 `main.js`、`manifest.json`、`styles.css`
+2. 放入 `<vault>/.obsidian/plugins/xu-homepages/`
 
-## Features / 功能
+## 使用方法
 
-- Startup profiles: open several notes at launch, each with its own open mode (replace / tab / split / window) and pane position (main / left / right sidebar)
-- Condition rules: route startup to different profiles by weekday and time range (overnight ranges supported); unmatched falls back to the default profile
-- Startup behavior: routed homepage profiles (default) or restore all files from the last session
-- Manual commands: open routed profile / open a chosen profile / restore last session
-- Bilingual UI (中文 / English); safe fallback: with no profile configured the plugin does not touch startup
+1. 打开 设置 → 启动台
+2. 选择主页来源：开启「单主页」并选择主页文件，或开启「组合主页」（两者互斥）
+3. 组合主页：新建启动组合 → 添加笔记 → 把常用组合设为默认
+4. 可选：添加条件规则，按星期/时间段智能路由（自上而下取第一条命中的规则）
+5. 「恢复上次关闭的所有文件」开关默认关，开启后启动时优先恢复会话
+6. `Ctrl+P` 搜索「启动台」手动打开主页 / 恢复会话
 
-## Differences from the Homepage plugin / 与 Homepage 插件的差异
+## 功能特性
 
-- Homepage opens a single homepage on startup; XU Homepages opens a **layout of multiple notes** (profiles), each item with its own open mode and pane position / Homepage 启动只开一个主页；启动台按组合一次打开多个笔记，每项可单独设置打开方式与窗格位置
-- XU Homepages adds **condition routing**: weekday + time-range rules pick which profile opens, with default fallback / 启动台支持条件路由：按星期与时间段自动切换组合，未命中回退默认组合
-- XU Homepages can **restore the last session** (all files open when Obsidian was closed) / 启动台可恢复上次关闭时的全部文件
+- 启动组合：启动时一次打开多个笔记，每项可单独设置打开方式（替换/新标签页/分屏/独立窗口）与窗格位置（主区/左侧栏/右侧栏）
+- 条件规则：按星期与时间段路由到不同组合（支持跨夜时间段），未命中回退默认组合
+- 恢复会话：启动时恢复上次关闭的全部文件（开关默认关，开启后优先于主页）
+- 手动命令：打开主页 / 打开指定组合 / 恢复上次会话
+- 双语界面（中文/English）；安全回退：未配置组合时插件不接管启动行为
 
-## Compatibility note / 兼容提示
+## 与 Homepage 插件的差异
 
-This plugin takes over Obsidian's startup behavior, same as the "Homepage" plugin. Running both may cause conflicts — keep only one enabled.
+- Homepage 启动只开一个主页；启动台按组合一次打开多个笔记，每项可单独设置打开方式与窗格位置
+- 启动台支持条件路由：按星期与时间段自动切换组合，未命中回退默认组合
+- 启动台可恢复上次关闭时的全部文件
+
+## 兼容提示
 
 本插件与 Homepage 插件同样接管启动行为，同时启用可能互相冲突，建议只保留一个。
 
 ## Credits / 致谢
-
-The startup-interception technique (patching `app.runOpeningBehavior`) is inspired by [mirnovov/obsidian-homepage](https://github.com/mirnovov/obsidian-homepage) (MIT). All code in this plugin is written from scratch.
 
 启动拦截思路（重写 `app.runOpeningBehavior`）借鉴了 [mirnovov/obsidian-homepage](https://github.com/mirnovov/obsidian-homepage)（MIT 许可），本插件全部代码为原创实现。
