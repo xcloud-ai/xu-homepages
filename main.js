@@ -8,7 +8,7 @@ const LOG_PREFIX = '[' + PLUGIN_ID + ']';
 const ALLOWED_MODES = ['replace', 'tab', 'split', 'window'];
 const ALLOWED_POSITIONS = ['main', 'left', 'right'];
 const SESSION_DEBOUNCE_MS = 3000;
-const REPO_URL = 'https://github.com/xu-obsidian-plugin/xu-homepages';
+const REPO_URL = 'https://github.com/xcloud-ai/xu-homepages';
 /* 彩色主页图标（渐变描边小房子），用于 ribbon；Obsidian 内置 Lucide 图标为单色 */
 const HOME_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="xu-homepages-svg">'
   + '<defs><linearGradient id="xu-homepages-grad" x1="0" y1="0" x2="24" y2="24" gradientUnits="userSpaceOnUse">'
