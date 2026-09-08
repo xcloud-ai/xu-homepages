@@ -383,6 +383,7 @@ class XuHomepages extends Plugin {
   handleNewTabLeaf(leaf) {
     if (!this.settings?.newTabHomepage) return;
     if (!leaf || !leaf.view || leaf.view.getViewType() !== 'empty') return;
+    if (!this.collectMainLeaves().includes(leaf)) return; // 侧栏空 leaf 不劫持
     if (this.xuLpSeenEmptyLeaves.has(leaf)) return;
     this.xuLpSeenEmptyLeaves.add(leaf); // 先标记防循环
     const target = this.getNewTabTarget();
@@ -463,6 +464,10 @@ class XuHomepages extends Plugin {
     if (this.hasUrlParams()) return false; // obsidian:// 带打开参数时不抢启动
     this.xuLpStartupLeaves = new Set(); // 记录本次启动打开的 leaf，供清屏保留
     if (this.settings.restoreLastSession) {
+      const cached = (this.settings.sessionCache || []).filter(
+        (p) => this.app.vault.getAbstractFileByPath(p) instanceof TFile
+      );
+      if (cached.length === 0) return false; // 无可恢复文件 → 交还原版，避免清屏后工作区全空
       await this.closeMainLeaves(null); // 先清空主区，避免与原生恢复的文件重复
       return await this.restoreSession(true);
     }
@@ -640,12 +645,12 @@ class XuHomepages extends Plugin {
   captureSession() {
     if (!this.app.workspace) return;
     const paths = [];
-    this.app.workspace.iterateAllLeaves((leaf) => {
+    for (const leaf of this.collectMainLeaves()) { // 仅主区：侧栏文件不进会话缓存
       const view = leaf.view;
       if (view && typeof view.getViewType === 'function' && view.getViewType() === 'markdown' && view.file) {
         if (!paths.includes(view.file.path)) paths.push(view.file.path);
       }
-    });
+    }
     if (JSON.stringify(paths) !== JSON.stringify(this.settings.sessionCache || [])) {
       this.settings.sessionCache = paths;
       void this.saveSettings();
