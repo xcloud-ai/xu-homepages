@@ -307,7 +307,7 @@ class XuHomepages extends Plugin {
       },
     });
 
-    // 新标签页打开主页（开关开启时拦截 workspace:new-tab）
+    // 新标签页打开主页（开关开启时监听 active-leaf-change：新空标签页 → 打开主页）
     this.patchNewTab();
 
     // 会话采集：layout-change 防抖记录当前打开的 markdown 文件
@@ -346,7 +346,6 @@ class XuHomepages extends Plugin {
     }
     this.unpatchOpeningBehaviour();
     this.unpatchReleaseNotes();
-    this.unpatchNewTab();
   }
 
   async loadSettings() {
@@ -363,33 +362,37 @@ class XuHomepages extends Plugin {
     await this.saveData(this.settings);
   }
 
-  /* ---------- 启动拦截（抄 homepage 的 runOpeningBehavior 重写） ---------- */
-
   /* ---------- 新标签页打开主页 ---------- */
 
+  /* 监听 active-leaf-change：新出现的空标签页（+/Ctrl+T/命令面板通用）→ 打开主页。
+     用已见 leaf 集合防重复；registerEvent 自动清理，无需手动 unpatch */
   patchNewTab() {
-    this.xuLpOrigNewTab = null;
-    try {
-      const cmd = this.app.commands?.commands?.['workspace:new-tab'];
-      if (!cmd || typeof cmd.callback !== 'function') {
-        console.warn(LOG_PREFIX, 'workspace:new-tab not found; new-tab homepage disabled');
-        return;
+    this.xuLpSeenEmptyLeaves = new Set();
+    this.app.workspace.onLayoutReady(() => {
+      for (const leaf of this.app.workspace.getLeavesOfType('empty')) {
+        this.xuLpSeenEmptyLeaves.add(leaf); // 存量空标签页不算「新出现」
       }
-      this.xuLpOrigNewTab = cmd.callback;
-      cmd.callback = () => { void this.handleNewTab(); };
-    } catch (e) {
-      console.error(LOG_PREFIX, 'patch new-tab failed', e);
-    }
+      this.registerEvent(
+        this.app.workspace.on('active-leaf-change', (leaf) => {
+          this.handleNewTabLeaf(leaf);
+        })
+      );
+    });
   }
 
-  unpatchNewTab() {
-    try {
-      const cmd = this.app.commands?.commands?.['workspace:new-tab'];
-      if (cmd && this.xuLpOrigNewTab) cmd.callback = this.xuLpOrigNewTab;
-    } catch (e) {
-      console.error(LOG_PREFIX, 'unpatch new-tab failed', e);
+  handleNewTabLeaf(leaf) {
+    if (!this.settings?.newTabHomepage) return;
+    if (!leaf || !leaf.view || leaf.view.getViewType() !== 'empty') return;
+    if (this.xuLpSeenEmptyLeaves.has(leaf)) return;
+    this.xuLpSeenEmptyLeaves.add(leaf); // 先标记防循环
+    const target = this.getNewTabTarget();
+    if (!target) return;
+    const file = this.app.vault.getAbstractFileByPath(target);
+    if (!(file instanceof TFile)) {
+      new Notice(this.t('err_file_not_found').replace('%s', target));
+      return;
     }
-    this.xuLpOrigNewTab = null;
+    leaf.openFile(file).catch((e) => console.error(LOG_PREFIX, 'new-tab open homepage failed', e));
   }
 
   /* 新标签页的目标：单主页优先，未配置时回退默认组合第一项 */
@@ -406,29 +409,7 @@ class XuHomepages extends Plugin {
     return null;
   }
 
-  async handleNewTab() {
-    const orig = this.xuLpOrigNewTab;
-    if (!orig) return;
-    const cmdNow = this.app.commands?.commands?.['workspace:new-tab'];
-    const target = this.settings?.newTabHomepage ? this.getNewTabTarget() : null;
-    if (!target) {
-      await orig.call(cmdNow || this.app);
-      return;
-    }
-    await orig.call(cmdNow || this.app); // 原版行为创建新标签页
-    try {
-      const leaf = this.app.workspace.getMostRecentLeaf?.();
-      if (leaf?.view?.getViewType() !== 'empty') return; // 新标签页非空则不干预
-      const file = this.app.vault.getAbstractFileByPath(target);
-      if (!(file instanceof TFile)) {
-        new Notice(this.t('err_file_not_found').replace('%s', target));
-        return;
-      }
-      await leaf.openFile(file);
-    } catch (e) {
-      console.error(LOG_PREFIX, 'new-tab open homepage failed', e);
-    }
-  }
+  /* ---------- 启动拦截（抄 homepage 的 runOpeningBehavior 重写） ---------- */
 
   patchOpeningBehaviour() {
     this.xuLpOrigRunOpeningBehavior = this.app.runOpeningBehavior;

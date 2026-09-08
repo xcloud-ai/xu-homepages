@@ -31,6 +31,7 @@ Manual install:
 - Startup profiles: open several notes at launch, each with its own open mode (replace / tab / split / window) and pane position (main / left / right sidebar)
 - Condition rules: route startup to different profiles by weekday and time range (overnight ranges supported); unmatched falls back to the default profile
 - Session restore: reopen all files from the last session on startup (off by default, takes priority over homepages)
+- New tab opens homepage: optional toggle — clicking "+" or pressing Ctrl+T opens the homepage (single homepage; fallback: first item of the default profile)
 - Manual commands: open homepage / open a chosen profile / restore last session
 - Bilingual UI (中文 / English); safe fallback: with nothing configured the plugin does not touch startup
 
