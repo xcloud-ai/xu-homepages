@@ -260,7 +260,10 @@ class XuHomepages extends Plugin {
 
     await this.loadSettings();
 
-    this.addRibbonIcon('layout-panel-left', this.t('ribbon'), () => this.openHomepageManual());
+    const ribbon = this.addRibbonIcon('house', this.t('ribbon'), () => this.openHomepageManual());
+    ribbon.addClass('xu-homepages-ribbon');
+    ribbon.empty(); // 移除默认单色 Lucide 图标，换自定义渐变小房子
+    ribbon.createSpan({ cls: 'xu-homepages-ribbon-icon' }).innerHTML = HOME_SVG;
     this.addSettingTab(new XuHomepagesSettingTab(this.app, this));
 
     this.addCommand({

@@ -65,3 +65,13 @@
   margin-top: 16px;
   line-height: 1.8;
 }
+
+/* 彩色 ribbon 图标（渐变小房子） */
+.xu-homepages-ribbon svg.xu-homepages-svg {
+  width: 18px;
+  height: 18px;
+}
+
+.xu-homepages-ribbon:hover svg.xu-homepages-svg {
+  filter: brightness(1.15);
+}
