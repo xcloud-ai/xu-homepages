@@ -31,6 +31,8 @@ const I18N = {
     setting_language_desc: '切换中文 / English',
     setting_restore_session: '恢复上次关闭的所有文件',
     setting_restore_session_desc: '开启后，启动时重新打开上次关闭的全部文件（优先于主页）；默认关闭',
+    setting_new_tab: '新标签页打开主页',
+    setting_new_tab_desc: '开启后，点击标签栏「+」或 Ctrl+T 新建标签页时，直接打开主页（单主页；未配置则用默认组合第一项）；默认关闭',
     section_single: '单主页',
     single_enable: '开启单主页',
     single_enable_desc: '启动时只打开这一个主页文件',
@@ -100,6 +102,8 @@ const I18N = {
     setting_language_desc: 'Switch Chinese / English',
     setting_restore_session: 'Restore all files closed last time',
     setting_restore_session_desc: 'When enabled, reopen all files from the last session on startup (takes priority over homepages); off by default',
+    setting_new_tab: 'New tab opens homepage',
+    setting_new_tab_desc: 'When enabled, clicking the "+" button or pressing Ctrl+T opens the homepage (single homepage; fallback: first item of the default profile); off by default',
     section_single: 'Single homepage',
     single_enable: 'Enable single homepage',
     single_enable_desc: 'Open only this note on startup',
@@ -168,6 +172,7 @@ const WEEKDAY_LABELS = {
 
 /* ---------------- 默认设置 ---------------- */
 /* restoreLastSession: 启动时恢复上次关闭的所有文件（默认关，开启后优先于主页）
+   newTabHomepage: 点击「+」/ Ctrl+T 新建标签页时打开主页（默认关）
    singleHomepage: 单主页 { enabled, target, mode }，与组合主页互斥
    profileMode: 组合主页开关 { enabled }
    profiles: [{ id, name, items: [{ target, mode, position }], isDefault }]
@@ -176,6 +181,7 @@ const WEEKDAY_LABELS = {
 const DEFAULT_SETTINGS = {
   language: 'zh',
   restoreLastSession: false,
+  newTabHomepage: false,
   singleHomepage: { enabled: true, target: '', mode: 'replace' },
   profileMode: { enabled: false },
   profiles: [],
@@ -301,6 +307,9 @@ class XuHomepages extends Plugin {
       },
     });
 
+    // 新标签页打开主页（开关开启时拦截 workspace:new-tab）
+    this.patchNewTab();
+
     // 会话采集：layout-change 防抖记录当前打开的 markdown 文件
     // 官方 load-time 指南：启动期事件注册放 onLayoutReady，不参与启动事件风暴
     this.app.workspace.onLayoutReady(() => {
@@ -337,6 +346,7 @@ class XuHomepages extends Plugin {
     }
     this.unpatchOpeningBehaviour();
     this.unpatchReleaseNotes();
+    this.unpatchNewTab();
   }
 
   async loadSettings() {
@@ -354,6 +364,71 @@ class XuHomepages extends Plugin {
   }
 
   /* ---------- 启动拦截（抄 homepage 的 runOpeningBehavior 重写） ---------- */
+
+  /* ---------- 新标签页打开主页 ---------- */
+
+  patchNewTab() {
+    this.xuLpOrigNewTab = null;
+    try {
+      const cmd = this.app.commands?.commands?.['workspace:new-tab'];
+      if (!cmd || typeof cmd.callback !== 'function') {
+        console.warn(LOG_PREFIX, 'workspace:new-tab not found; new-tab homepage disabled');
+        return;
+      }
+      this.xuLpOrigNewTab = cmd.callback;
+      cmd.callback = () => { void this.handleNewTab(); };
+    } catch (e) {
+      console.error(LOG_PREFIX, 'patch new-tab failed', e);
+    }
+  }
+
+  unpatchNewTab() {
+    try {
+      const cmd = this.app.commands?.commands?.['workspace:new-tab'];
+      if (cmd && this.xuLpOrigNewTab) cmd.callback = this.xuLpOrigNewTab;
+    } catch (e) {
+      console.error(LOG_PREFIX, 'unpatch new-tab failed', e);
+    }
+    this.xuLpOrigNewTab = null;
+  }
+
+  /* 新标签页的目标：单主页优先，未配置时回退默认组合第一项 */
+  getNewTabTarget() {
+    const s = this.settings;
+    if (!s) return null;
+    if (s.singleHomepage?.enabled && s.singleHomepage.target) return s.singleHomepage.target;
+    if (s.profileMode?.enabled) {
+      const profiles = Array.isArray(s.profiles) ? s.profiles : [];
+      const def = profiles.find((p) => p.isDefault) || profiles[0];
+      const item = (def?.items || []).find((it) => it.target);
+      return item ? item.target : null;
+    }
+    return null;
+  }
+
+  async handleNewTab() {
+    const orig = this.xuLpOrigNewTab;
+    if (!orig) return;
+    const cmdNow = this.app.commands?.commands?.['workspace:new-tab'];
+    const target = this.settings?.newTabHomepage ? this.getNewTabTarget() : null;
+    if (!target) {
+      await orig.call(cmdNow || this.app);
+      return;
+    }
+    await orig.call(cmdNow || this.app); // 原版行为创建新标签页
+    try {
+      const leaf = this.app.workspace.getMostRecentLeaf?.();
+      if (leaf?.view?.getViewType() !== 'empty') return; // 新标签页非空则不干预
+      const file = this.app.vault.getAbstractFileByPath(target);
+      if (!(file instanceof TFile)) {
+        new Notice(this.t('err_file_not_found').replace('%s', target));
+        return;
+      }
+      await leaf.openFile(file);
+    } catch (e) {
+      console.error(LOG_PREFIX, 'new-tab open homepage failed', e);
+    }
+  }
 
   patchOpeningBehaviour() {
     this.xuLpOrigRunOpeningBehavior = this.app.runOpeningBehavior;
@@ -614,6 +689,17 @@ class XuHomepagesSettingTab extends PluginSettingTab {
         tg.setValue(!!plugin.settings.restoreLastSession)
           .onChange(async (v) => {
             plugin.settings.restoreLastSession = v;
+            await plugin.saveSettings();
+          }));
+
+    // 新标签页打开主页（默认关，开启后「+」/Ctrl+T 打开主页）
+    new Setting(containerEl)
+      .setName(this.t('setting_new_tab'))
+      .setDesc(this.t('setting_new_tab_desc'))
+      .addToggle((tg) =>
+        tg.setValue(!!plugin.settings.newTabHomepage)
+          .onChange(async (v) => {
+            plugin.settings.newTabHomepage = v;
             await plugin.saveSettings();
           }));
 
