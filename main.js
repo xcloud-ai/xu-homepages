@@ -1,7 +1,7 @@
 /* XU Homepages — 启动台：启动行为接管插件（单主页/组合主页/条件路由/会话恢复） */
 'use strict';
 
-const { Plugin, PluginSettingTab, Setting, Notice, TFile, FuzzySuggestModal } = require('obsidian');
+const { Plugin, PluginSettingTab, Setting, Notice, TFile, FuzzySuggestModal, TFileSuggest } = require('obsidian');
 
 const PLUGIN_ID = 'xu-homepages';
 const LOG_PREFIX = '[' + PLUGIN_ID + ']';
@@ -53,7 +53,6 @@ const I18N = {
     section_profiles_desc: '启动或手动触发时按顺序打开的一组笔记。规则未命中时打开默认组合。',
     btn_add_profile: '新建组合',
     btn_add_item: '添加笔记',
-    btn_browse: '浏览',
     profile_name: '组合名称',
     profile_name_ph: '如：工作日工作台',
     profile_default: '默认组合',
@@ -89,7 +88,6 @@ const I18N = {
     notice_session_restored: '已恢复上次会话（%d 个文件）',
     notice_profile_opened: '已打开组合：%s',
     modal_pick_profile: '选择要打开的组合',
-    modal_pick_file: '选择笔记文件',
     delete: '删除',
   },
   en: {
@@ -124,7 +122,6 @@ const I18N = {
     section_profiles_desc: 'A list of notes opened in order on startup or manual trigger. The default profile is used when no rule matches.',
     btn_add_profile: 'New profile',
     btn_add_item: 'Add note',
-    btn_browse: 'Browse',
     profile_name: 'Profile name',
     profile_name_ph: 'e.g. Workday dashboard',
     profile_default: 'Default profile',
@@ -160,7 +157,6 @@ const I18N = {
     notice_session_restored: 'Last session restored (%d files)',
     notice_profile_opened: 'Profile opened: %s',
     modal_pick_profile: 'Choose a profile to open',
-    modal_pick_file: 'Choose a note',
     delete: 'Delete',
   },
 };
@@ -209,27 +205,6 @@ function arrayRemove(arr, item) {
 }
 
 /* ---------------- Modal ---------------- */
-
-class FilePickModal extends FuzzySuggestModal {
-  constructor(app, plugin, onPick) {
-    super(app);
-    this.plugin = plugin;
-    this.onPick = onPick;
-    this.setPlaceholder(plugin.t('modal_pick_file'));
-  }
-
-  getItems() {
-    return this.app.vault.getMarkdownFiles();
-  }
-
-  getItemText(file) {
-    return file.path;
-  }
-
-  onChooseItem(file) {
-    this.onPick(file.path);
-  }
-}
 
 class ProfilePickModal extends FuzzySuggestModal {
   constructor(app, plugin, onPick) {
@@ -751,16 +726,14 @@ class XuHomepagesSettingTab extends PluginSettingTab {
           plugin.settings.singleHomepage.target = text.inputEl.value.trim();
           await plugin.saveSettings();
         });
+        new TFileSuggest(text.inputEl, async (path) => {
+          text.inputEl.value = path;
+          plugin.settings.singleHomepage.target = path;
+          await plugin.saveSettings();
+          this.display();
+        });
         return text;
       })
-      .addButton((btn) =>
-        btn.setIcon('file-search').setTooltip(this.t('btn_browse')).onClick(() => {
-          new FilePickModal(this.app, plugin, async (path) => {
-            plugin.settings.singleHomepage.target = path;
-            await plugin.saveSettings();
-            this.display();
-          }).open();
-        }))
       .addDropdown((dd) =>
         dd.addOption('replace', this.t('mode_replace'))
           .addOption('tab', this.t('mode_tab'))
@@ -887,16 +860,14 @@ class XuHomepagesSettingTab extends PluginSettingTab {
             item.target = text.inputEl.value.trim();
             await plugin.saveSettings();
           });
+          new TFileSuggest(text.inputEl, async (path) => {
+            text.inputEl.value = path;
+            item.target = path;
+            await plugin.saveSettings();
+            this.display();
+          });
           return text;
         })
-        .addButton((btn) =>
-          btn.setIcon('file-search').setTooltip(this.t('btn_browse')).onClick(() => {
-            new FilePickModal(this.app, plugin, async (path) => {
-              item.target = path;
-              await plugin.saveSettings();
-              this.display();
-            }).open();
-          }))
         .addDropdown((dd) =>
           dd.addOption('replace', this.t('mode_replace'))
             .addOption('tab', this.t('mode_tab'))
