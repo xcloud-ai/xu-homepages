@@ -1,7 +1,7 @@
 /* XU Homepages — 启动台：启动行为接管插件（单主页/组合主页/条件路由/会话恢复） */
 'use strict';
 
-const { Plugin, PluginSettingTab, Setting, Notice, TFile, FuzzySuggestModal, TFileSuggest } = require('obsidian');
+const { Plugin, PluginSettingTab, Setting, Notice, TFile, FuzzySuggestModal } = require('obsidian');
 
 const PLUGIN_ID = 'xu-homepages';
 const LOG_PREFIX = '[' + PLUGIN_ID + ']';
@@ -22,6 +22,8 @@ const HOME_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fi
 
 const I18N = {
   zh: {
+    btn_browse: '浏览',
+    modal_pick_file: '选择笔记文件（输入过滤）',
     cmd_open: '启动台：打开主页',
     cmd_open_profile: '启动台：打开指定组合…',
     cmd_restore_session: '启动台：恢复上次会话',
@@ -91,6 +93,8 @@ const I18N = {
     delete: '删除',
   },
   en: {
+    btn_browse: 'Browse',
+    modal_pick_file: 'Choose a note (type to filter)',
     cmd_open: 'Launchpad: open homepage',
     cmd_open_profile: 'Launchpad: open a profile…',
     cmd_restore_session: 'Launchpad: restore last session',
@@ -205,6 +209,32 @@ function arrayRemove(arr, item) {
 }
 
 /* ---------------- Modal ---------------- */
+
+class FilePickModal extends FuzzySuggestModal {
+  constructor(app, plugin, onPick) {
+    super(app);
+    this.plugin = plugin;
+    this.onPick = onPick;
+    this.setPlaceholder(plugin.t('modal_pick_file'));
+  }
+
+  getItems() {
+    if (this.app.metadataCache && typeof this.app.metadataCache.getCachedFiles === 'function') {
+      return this.app.metadataCache.getCachedFiles();
+    }
+    console.warn(LOG_PREFIX + ' metadataCache.getCachedFiles unavailable');
+    return [];
+  }
+
+  getItemText(path) {
+    return path;
+  }
+
+  onChooseItem(path) {
+    this.onPick(path);
+  }
+}
+
 
 class ProfilePickModal extends FuzzySuggestModal {
   constructor(app, plugin, onPick) {
@@ -726,14 +756,16 @@ class XuHomepagesSettingTab extends PluginSettingTab {
           plugin.settings.singleHomepage.target = text.inputEl.value.trim();
           await plugin.saveSettings();
         });
-        new TFileSuggest(text.inputEl, async (path) => {
-          text.inputEl.value = path;
-          plugin.settings.singleHomepage.target = path;
-          await plugin.saveSettings();
-          this.display();
-        });
         return text;
       })
+      .addButton((btn) =>
+        btn.setIcon('file-search').setTooltip(this.t('btn_browse')).onClick(() => {
+          new FilePickModal(this.app, plugin, async (path) => {
+            plugin.settings.singleHomepage.target = path;
+            await plugin.saveSettings();
+            this.display();
+          }).open();
+        }))
       .addDropdown((dd) =>
         dd.addOption('replace', this.t('mode_replace'))
           .addOption('tab', this.t('mode_tab'))
@@ -860,14 +892,16 @@ class XuHomepagesSettingTab extends PluginSettingTab {
             item.target = text.inputEl.value.trim();
             await plugin.saveSettings();
           });
-          new TFileSuggest(text.inputEl, async (path) => {
-            text.inputEl.value = path;
-            item.target = path;
-            await plugin.saveSettings();
-            this.display();
-          });
           return text;
         })
+        .addButton((btn) =>
+          btn.setIcon('file-search').setTooltip(this.t('btn_browse')).onClick(() => {
+            new FilePickModal(this.app, plugin, async (path) => {
+              item.target = path;
+              await plugin.saveSettings();
+              this.display();
+            }).open();
+          }))
         .addDropdown((dd) =>
           dd.addOption('replace', this.t('mode_replace'))
             .addOption('tab', this.t('mode_tab'))
