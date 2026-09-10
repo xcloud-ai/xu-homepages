@@ -1,9 +1,9 @@
 {
   "id": "xu-homepages",
   "name": "XU Homepages",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "minAppVersion": "1.4.0",
-  "description": "Open multiple notes as a startup layout, route homepages by weekday and time ranges, and restore the last session.",
+  "description": "启动台：多笔记组合启动布局，按星期与时间段路由主页，恢复上次会话.",
   "author": "旭说",
   "authorUrl": "https://github.com/xcloud-ai",
   "isDesktopOnly": false
