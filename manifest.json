@@ -1,7 +1,7 @@
 {
   "id": "xu-homepages",
   "name": "XU Homepages",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "minAppVersion": "1.4.0",
   "description": "启动台：多笔记组合启动布局，按星期与时间段路由主页，恢复上次会话.",
   "author": "旭说",

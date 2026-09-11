@@ -29,12 +29,14 @@ const I18N = {
     cmd_restore_session: '启动台：恢复上次会话',
     ribbon: '启动台',
 
+    setting_title: 'XU Homepages（启动台）',
+    setting_header_desc: '启动台插件：接管 Obsidian 的启动行为——支持单主页、多笔记组合布局主页、按星期与时间段条件路由，并可恢复上次关闭的会话。',
     setting_language: '界面语言',
     setting_language_desc: '切换中文 / English',
     setting_restore_session: '恢复上次关闭的所有文件',
     setting_restore_session_desc: '开启后，启动时重新打开上次关闭的全部文件（优先于主页）；关闭时启动只打开主页，其余文件全部不打开；默认关闭',
     setting_new_tab: '新标签页打开主页',
-    setting_new_tab_desc: '开启后，点击标签栏「+」或 Ctrl+T 新建标签页时，直接打开主页（单主页；未配置则用默认组合第一项）；默认关闭',
+    setting_new_tab_desc: '开启后，点击标签栏「+」或 Ctrl+T 新建标签页时，直接打开主页（单主页；未配置则用默认组合第一项）；默认开启',
     section_single: '单主页',
     single_enable: '开启单主页',
     single_enable_desc: '启动时只打开这一个主页文件',
@@ -44,7 +46,7 @@ const I18N = {
     profile_enable_desc: '启动时按下方规则路由打开一组笔记（与单主页互斥）',
     notice_mutual_single: '组合主页已开启，单主页已自动关闭：只能开单主页或组合主页',
     notice_mutual_profile: '单主页已开启，组合主页已自动关闭：只能开单主页或组合主页',
-    profile_usage_hint: '组合主页用法：在「启动组合」里添加笔记并把常用组合设为默认；再在「条件规则」里按星期/时间段绑定组合（自上而下取第一条命中的规则，未命中打开默认组合，时间与规则联动）。详见 ',
+    profile_usage_hint: '组合主页用法：在「启动组合」里添加笔记并把常用组合设为默认；再在「条件规则」里按星期/时间段绑定组合（自上而下取第一条命中的规则，未命中打开默认组合，时间与规则联动）。',
     err_single_not_set: '请先在设置中选择单主页文件',
     err_no_mode: '请先在设置中开启单主页或组合主页',
 
@@ -80,7 +82,9 @@ const I18N = {
     rule_profile: '命中时打开',
     rule_profile_none: '（未选择）',
 
-    tip_usage: '<b>使用方法</b><br>1. 开启「单主页」并选择主页文件，或开启「组合主页」（两者互斥）<br>2. 组合主页：新建组合 → 添加笔记 → 设默认；条件规则按星期/时间段联动路由<br>3. 「恢复上次关闭的所有文件」开启后启动时优先恢复会话<br>4. Ctrl+P 搜索「启动台」手动打开主页 / 恢复会话',
+    setting_docs: '使用文档',
+    setting_docs_desc: '在 GitHub 查看完整使用说明',
+    btn_github: 'GitHub',
 
     err_file_not_found: '文件不存在：%s',
     err_no_profile: '没有可打开的组合，请先在设置中创建',
@@ -100,12 +104,14 @@ const I18N = {
     cmd_restore_session: 'Launchpad: restore last session',
     ribbon: 'Launchpad',
 
+    setting_title: 'XU Homepages',
+    setting_header_desc: 'Launchpad plugin: takes over Obsidian startup behavior — single homepage, multi-note profile layouts, weekday/time-based routing, and last-session restore.',
     setting_language: 'Language',
     setting_language_desc: 'Switch Chinese / English',
     setting_restore_session: 'Restore all files closed last time',
     setting_restore_session_desc: 'When enabled, reopen all files from the last session on startup (takes priority over homepages); when off, only the homepage opens at startup; off by default',
     setting_new_tab: 'New tab opens homepage',
-    setting_new_tab_desc: 'When enabled, clicking the "+" button or pressing Ctrl+T opens the homepage (single homepage; fallback: first item of the default profile); off by default',
+    setting_new_tab_desc: 'When enabled, clicking the "+" button or pressing Ctrl+T opens the homepage (single homepage; fallback: first item of the default profile); on by default',
     section_single: 'Single homepage',
     single_enable: 'Enable single homepage',
     single_enable_desc: 'Open only this note on startup',
@@ -115,7 +121,7 @@ const I18N = {
     profile_enable_desc: 'Open a set of notes on startup via the rules below (mutually exclusive with single homepage)',
     notice_mutual_single: 'Profile homepages enabled — single homepage turned off (only one can be active)',
     notice_mutual_profile: 'Single homepage enabled — profile homepages turned off (only one can be active)',
-    profile_usage_hint: 'How to use: add notes to a profile below and mark one as default; then bind profiles to rules by weekday/time range (top-down, first match wins; falls back to the default profile). See ',
+    profile_usage_hint: 'How to use: add notes to a profile below and mark one as default; then bind profiles to rules by weekday/time range (top-down, first match wins; falls back to the default profile).',
     err_single_not_set: 'Pick a homepage note in settings first',
     err_no_mode: 'Enable single homepage or profile homepages in settings first',
 
@@ -151,7 +157,9 @@ const I18N = {
     rule_profile: 'Open profile',
     rule_profile_none: '(none)',
 
-    tip_usage: '<b>Usage</b><br>1. Enable "Single homepage" and pick a note, or enable "Profile homepages" (mutually exclusive)<br>2. Profiles: create one, add notes, mark default; rules route by weekday/time<br>3. "Restore last session" takes priority over homepages when enabled<br>4. Ctrl+P and search "Launchpad" to open homepage / restore session',
+    setting_docs: 'Documentation',
+    setting_docs_desc: 'View the full usage guide on GitHub',
+    btn_github: 'GitHub',
 
     err_file_not_found: 'File not found: %s',
     err_no_profile: 'No profile available. Create one in settings first.',
@@ -172,7 +180,7 @@ const WEEKDAY_LABELS = {
 
 /* ---------------- 默认设置 ---------------- */
 /* restoreLastSession: 启动时恢复上次关闭的所有文件（默认关，开启后优先于主页）
-   newTabHomepage: 点击「+」/ Ctrl+T 新建标签页时打开主页（默认关）
+   newTabHomepage: 点击「+」/ Ctrl+T 新建标签页时打开主页（默认开）
    singleHomepage: 单主页 { enabled, target, mode }，与组合主页互斥
    profileMode: 组合主页开关 { enabled }
    profiles: [{ id, name, items: [{ target, mode, position }], isDefault }]
@@ -181,7 +189,7 @@ const WEEKDAY_LABELS = {
 const DEFAULT_SETTINGS = {
   language: 'zh',
   restoreLastSession: false,
-  newTabHomepage: false,
+  newTabHomepage: true,
   singleHomepage: { enabled: true, target: '', mode: 'replace' },
   profileMode: { enabled: false },
   profiles: [],
@@ -687,7 +695,8 @@ class XuHomepagesSettingTab extends PluginSettingTab {
     const { containerEl } = this;
     const plugin = this.plugin;
     containerEl.empty();
-    containerEl.createEl('h2', { text: 'XU Homepages 启动台' });
+    containerEl.createEl('h2', { text: this.t('setting_title') });
+    containerEl.createDiv({ cls: 'xu-homepages-hint', text: this.t('setting_header_desc') });
 
     // 语言切换器必须放最顶部
     new Setting(containerEl)
@@ -782,7 +791,6 @@ class XuHomepagesSettingTab extends PluginSettingTab {
     if (plugin.settings.profileMode.enabled) {
       const usage = containerEl.createDiv('xu-homepages-hint');
       usage.createSpan({ text: this.t('profile_usage_hint') });
-      usage.createEl('a', { text: REPO_URL, href: REPO_URL });
     }
     new Setting(containerEl)
       .setName(this.t('profile_enable'))
@@ -847,9 +855,15 @@ class XuHomepagesSettingTab extends PluginSettingTab {
 
     } // end 组合主页配置区（profileMode.enabled）
 
-    const tip = containerEl.createEl('div');
-    tip.addClass('xu-homepages-hint');
-    tip.innerHTML = this.t('tip_usage');
+    // ===== GitHub 使用文档（与其他插件统一格式）=====
+    containerEl.createEl('hr', { cls: 'xu-homepages-divider' });
+    new Setting(containerEl)
+      .setName(this.t('setting_docs'))
+      .setDesc(this.t('setting_docs_desc'))
+      .addButton((btn) =>
+        btn.setButtonText(this.t('btn_github')).onClick(() => {
+          window.open(REPO_URL, '_blank');
+        }));
   }
 
   renderProfile(containerEl, profile) {

@@ -1,5 +1,20 @@
 /* XU Homepages — 所有 class 加前缀 xu-homepages- */
 
+/* 设置页标题下描述 / 用法提示 */
+.xu-homepages-hint {
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+  margin: 4px 0 12px;
+  line-height: 1.5;
+}
+
+/* 分区分隔线 */
+.xu-homepages-divider {
+  border: none;
+  border-top: 1px solid var(--background-modifier-border);
+  margin: 16px 0;
+}
+
 /* 组合 / 规则卡片 */
 .xu-homepages-card {
   border: 1px solid var(--background-modifier-border);
