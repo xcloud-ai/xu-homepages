@@ -695,7 +695,8 @@ class XuHomepagesSettingTab extends PluginSettingTab {
     const { containerEl } = this;
     const plugin = this.plugin;
     containerEl.empty();
-    containerEl.createEl('h2', { text: this.t('setting_title') });
+    // 标准头（官方要求 setHeading，禁止直接创建 h2/h3）
+    new Setting(containerEl).setName(this.t('setting_title')).setHeading();
     containerEl.createDiv({ cls: 'xu-homepages-hint', text: this.t('setting_header_desc') });
 
     // 语言切换器必须放最顶部
@@ -742,7 +743,7 @@ class XuHomepagesSettingTab extends PluginSettingTab {
     }
 
     // ===== 单主页 =====
-    containerEl.createEl('h3', { text: this.t('section_single') });
+    new Setting(containerEl).setName(this.t('section_single')).setHeading();
     new Setting(containerEl)
       .setName(this.t('single_enable'))
       .setDesc(this.t('single_enable_desc'))
@@ -787,7 +788,7 @@ class XuHomepagesSettingTab extends PluginSettingTab {
           }));
 
     // ===== 组合主页 =====
-    containerEl.createEl('h3', { text: this.t('section_profile') });
+    new Setting(containerEl).setName(this.t('section_profile')).setHeading();
     if (plugin.settings.profileMode.enabled) {
       const usage = containerEl.createDiv('xu-homepages-hint');
       usage.createSpan({ text: this.t('profile_usage_hint') });
@@ -809,7 +810,7 @@ class XuHomepagesSettingTab extends PluginSettingTab {
 
     // ===== 启动组合 / 条件规则（仅组合主页开启时显示，保持设置页简洁）=====
     if (plugin.settings.profileMode.enabled) {
-    containerEl.createEl('h3', { text: this.t('section_profiles') });
+    new Setting(containerEl).setName(this.t('section_profiles')).setHeading();
     const profilesDesc = containerEl.createDiv('setting-item-description');
     profilesDesc.setText(this.t('section_profiles_desc'));
 
@@ -830,7 +831,7 @@ class XuHomepagesSettingTab extends PluginSettingTab {
       }));
 
     // ===== 条件规则 =====
-    containerEl.createEl('h3', { text: this.t('section_rules') });
+    new Setting(containerEl).setName(this.t('section_rules')).setHeading();
     const rulesDesc = containerEl.createDiv('setting-item-description');
     rulesDesc.setText(this.t('section_rules_desc'));
 
