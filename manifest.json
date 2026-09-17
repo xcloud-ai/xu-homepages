@@ -1,9 +1,9 @@
 {
   "id": "xu-homepages",
   "name": "XU Homepages",
-  "version": "1.0.7",
+  "version": "2.0.0",
   "minAppVersion": "1.4.0",
-  "description": "启动台：多笔记组合启动布局，按星期与时间段路由主页，恢复上次会话.",
+  "description": "启动台：单一主页接管启动、新标签页直达主页、恢复上次会话.",
   "author": "旭说",
   "authorUrl": "https://github.com/xcloud-ai",
   "isDesktopOnly": false

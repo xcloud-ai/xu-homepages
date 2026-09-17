@@ -1,7 +1,7 @@
 # XU Homepages
 
 > [!NOTE] 中文说明
-> **启动台**：启动行为接管插件——启动时按布局组合打开多个笔记，按星期与时间段智能路由主页，支持新标签页直达主页与恢复上次关闭的会话。
+> **启动台**：单一主页启动接管插件——启动时打开主页或恢复上次会话，新标签页直达主页。
 
 English documentation is included below the Chinese section. / 英文说明在本页下半部分。
 
@@ -9,13 +9,15 @@ English documentation is included below the Chinese section. / 英文说明在�
 
 ## 简介
 
-XU Homepages（启动台）接管 Obsidian 的启动行为，把「打开一个主页」扩展为完整的启动方案：
+XU Homepages（启动台）接管 Obsidian 的启动行为，功能收敛为四件事：
 
-- **单主页**：启动只打开你指定的一个文件（默认模式）
-- **组合主页**：一次打开多个笔记（每日笔记 + 仪表盘 + 日历等），每个条目可指定打开方式与窗格位置
-- **条件路由**：按星期几 + 时间段自动选择对应组合（如工作日开工作台、周末开周报），未命中回退默认组合
-- **会话恢复**：启动时还原上次关闭的全部文件
-- **新标签页**：点击标签栏「+」或 Ctrl+T 时直接打开主页
+- **单一主页**：在设置里选择一个文件路径作为主页
+- **启动接管**：启动时打开该主页（默认），或恢复上次会话（设置里下拉二选一）
+- **新标签页直达主页**：点击标签栏「+」或按 Ctrl+T，新标签页直接打开主页（关闭标签不受影响）
+- **恢复上次会话**：启动时一键还原上次关闭时打开的全部文件
+
+> [!IMPORTANT] v2.0.0 破坏性变更
+> v1.x 的组合主页、星期/时间段条件路由、多窗格布局已移除，设置仅保留单一主页。旧配置中的主页文件路径会自动沿用。
 
 ## 安装
 
@@ -38,20 +40,20 @@ XU Homepages（启动台）接管 Obsidian 的启动行为，把「打开一个�
 ## 使用方法
 
 1. 启用插件后进入设置页，顶部可切换界面语言（中文 / English）
-2. **恢复上次关闭的所有文件**（默认关）：开启后启动时还原上次会话；关闭则启动只打开主页
-3. **单主页**（默认开）：选择主页文件并设置打开方式（替换当前页 / 新标签页 / 分屏 / 独立窗口）
-4. **组合主页**：开启后自动关闭单主页（两者互斥），在设置页创建组合、添加条目（文件 + 打开方式 + 窗格位置：主区 / 左侧栏 / 右侧栏）
-5. **条件规则**（组合主页区域内）：为每个组合添加「星期几 + 时间段」规则，自上而下取第一条命中的组合；都不命中则打开默认组合
-6. **新标签页打开主页**（默认关）：开启后点标签栏「+」或 Ctrl+T，新标签页直接显示主页文件
+2. **主页文件**：直接输入 vault 内路径，或点「浏览」从文件列表中选择
+3. **启动行为**（下拉二选一）：
+   - **打开主页**（默认）：启动时只打开主页文件
+   - **恢复上次会话**：启动时还原上次关闭时打开的全部文件
+4. **新标签页打开主页**（默认开）：开启后点标签栏「+」或 Ctrl+T，新标签页直接显示主页文件；关闭标签不会误弹主页
 
-**命令**：命令面板（Ctrl+P）搜索「启动台 / Homepages」——打开主页、按规则打开组合、恢复上次会话。
+**命令**：命令面板（Ctrl+P）搜索「启动台 / Homepages」——打开主页、恢复上次会话。命令名随界面语言即时切换。
 
 ## 功能特性
 
 - 启动拦截：接管 Obsidian 原生启动行为，严格按配置执行
-- 布局组合多开：N 个条目，各带打开方式与窗格位置
-- 条件路由引擎：星期几 + 时间段（支持跨夜），默认组合回退
-- 会话采集：自动记录关闭前的打开文件（含崩溃兜底落盘）
+- 新标签页直达：精准区分「新建标签」与「关闭标签/合并分屏」，只在新建时打开主页
+- 会话采集：防抖记录关闭前打开的文件（含卸载兜底落盘）
+- 记忆卫生：主页文件被移动时自动跟随更新路径，被删除时提示重新选择
 - 双语界面：中文 / English 随时切换
 - 移动端兼容：不依赖桌面专属 API
 
@@ -61,10 +63,10 @@ XU Homepages（启动台）接管 Obsidian 的启动行为，把「打开一个�
 
 | 能力 | Homepage | XU Homepages |
 |------|----------|--------------|
-| 启动打开 | 1 个主页 | 组合多开（N 个文件 + 位置排布） |
-| 条件路由 | 无 | 星期几 + 时间段智能路由 |
+| 启动打开 | 1 个主页 | 单一主页或恢复上次会话（可选） |
 | 会话恢复 | 无 | 一键恢复上次关闭的全部文件 |
-| 新标签页主页 | 无 | 「+」按钮直达主页 |
+| 新标签页主页 | 无 | 「+」按钮 / Ctrl+T 直达主页 |
+| 主页移动跟随 | 无 | 重命名/移动自动同步路径 |
 
 ## 兼容提示
 
@@ -80,17 +82,19 @@ XU Homepages（启动台）接管 Obsidian 的启动行为，把「打开一个�
 # XU Homepages (English)
 
 > [!NOTE]
-> **XU Homepages (启动台)** — Take over Obsidian's startup behavior: open multiple notes as a startup layout, route homepages by weekday and time ranges, open your homepage in every new tab, and restore the last session.
+> **XU Homepages (启动台)** — A single-homepage startup takeover plugin: open your homepage or restore the last session on launch, and jump straight to the homepage in every new tab.
 
 ## About
 
-XU Homepages extends "open one homepage on startup" into a complete startup solution:
+XU Homepages takes over Obsidian's startup behavior, focused on four things:
 
-- **Single homepage**: open exactly one file on startup (default mode)
-- **Homepage profiles**: open several notes at once (e.g. daily note + dashboard + calendar), each with its own open mode and pane position
-- **Conditional routing**: pick a profile automatically by weekday and time range (workbench on weekdays, weekly review on weekends), with a default fallback
+- **Single homepage**: pick one file path in settings as your homepage
+- **Startup takeover**: open that homepage on startup (default), or restore the last session — a dropdown switch in settings
+- **New-tab homepage**: clicking the tab bar "+" or pressing Ctrl+T opens your homepage directly (closing tabs is not affected)
 - **Session restore**: reopen everything that was open when Obsidian was last closed
-- **New-tab homepage**: clicking the tab bar "+" or pressing Ctrl+T opens your homepage directly
+
+> [!IMPORTANT] Breaking change in v2.0.0
+> The v1.x profile layouts, weekday/time-based routing, and multi-pane opening have been removed; only the single homepage remains. Your existing homepage file path carries over automatically.
 
 ## Installation
 
@@ -113,20 +117,20 @@ Settings → Community plugins → Browse → search "XU Homepages" → Install 
 ## Usage
 
 1. Open the plugin settings and choose the interface language at the top (中文 / English)
-2. **Restore last session** (off by default): when enabled, startup reopens everything from your last session; when disabled, startup opens only the configured homepage
-3. **Single homepage** (on by default): pick the homepage file and its open mode (replace current tab / new tab / split / window)
-4. **Homepage profiles**: enabling it turns the single homepage off (they are mutually exclusive); create profiles and add items (file + open mode + pane position: main / left sidebar / right sidebar)
-5. **Conditional rules** (inside the profiles section): attach "weekday + time range" rules to profiles; the first matching rule wins, otherwise the default profile opens
-6. **Open homepage in new tab** (off by default): the "+" button and Ctrl+T open the homepage in the new tab
+2. **Homepage file**: type a vault path, or click "Browse" to pick from the file list
+3. **Startup behavior** (dropdown, pick one):
+   - **Open homepage** (default): startup opens only the homepage file
+   - **Restore last session**: startup reopens everything from your last session
+4. **Open homepage in new tab** (on by default): the "+" button and Ctrl+T open the homepage in the new tab; closing tabs never triggers it by mistake
 
-**Commands**: search "Homepages" in the command palette (Ctrl+P) — open homepage, open profile by rules, restore last session.
+**Commands**: search "Homepages" in the command palette (Ctrl+P) — open homepage, restore last session. Command names switch instantly with the UI language.
 
 ## Features
 
 - Startup interception: replaces Obsidian's native startup behavior
-- Multi-note layouts: N items, each with open mode and pane position
-- Rule engine: weekday + time range (overnight ranges supported) with default fallback
+- New-tab redirect: reliably tells "new tab" apart from "closing a tab / merging panes" — only new tabs open the homepage
 - Session capture: debounced recording plus an unload-time fallback save
+- Memory hygiene: follows renames of the homepage file automatically and prompts on deletion
 - Bilingual UI: Chinese / English switchable at any time
 - Mobile friendly: no desktop-only APIs
 
@@ -136,10 +140,10 @@ The startup-interception idea is inspired by [mirnovov/obsidian-homepage](https:
 
 | Capability | Homepage | XU Homepages |
 |------|----------|--------------|
-| On startup | Opens 1 homepage | Opens a whole profile (N files + positions) |
-| Conditional routing | No | Weekday + time-range routing |
+| On startup | Opens 1 homepage | Single homepage or restore last session (optional) |
 | Session restore | No | Reopen everything from last session |
-| New-tab homepage | No | "+" button opens the homepage |
+| New-tab homepage | No | "+" button / Ctrl+T opens the homepage |
+| Follows file renames | No | Homepage path syncs on rename/move |
 
 ## Compatibility
 

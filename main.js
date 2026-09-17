@@ -1,13 +1,14 @@
-/* XU Homepages — 启动台：启动行为接管插件（单主页/组合主页/条件路由/会话恢复） */
+/* XU Homepages — 启动台：单一主页接管启动（打开主页 / 恢复上次会话 / 新标签页直达主页） */
 'use strict';
 
 const { Plugin, PluginSettingTab, Setting, Notice, TFile, FuzzySuggestModal } = require('obsidian');
 
 const PLUGIN_ID = 'xu-homepages';
 const LOG_PREFIX = '[' + PLUGIN_ID + ']';
-const ALLOWED_MODES = ['replace', 'tab', 'split', 'window'];
-const ALLOWED_POSITIONS = ['main', 'left', 'right'];
-const SESSION_DEBOUNCE_MS = 3000;
+const SESSION_DEBOUNCE_MS = 300;
+/* 新标签页劫持判定参数（见 handleNewTabLeaf 注释） */
+const CLOSE_SUPPRESS_MS = 400;
+const REDIRECT_DELAY_MS = 80;
 const REPO_URL = 'https://github.com/xcloud-ai/xu-homepages';
 /* 彩色主页图标（渐变描边小房子），用于 ribbon；Obsidian 内置 Lucide 图标为单色 */
 const HOME_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="xu-homepages-svg">'
@@ -18,6 +19,9 @@ const HOME_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fi
   + '<path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>'
   + '</g></svg>';
 
+/* v1.x 多主页字段：loadSettings 忽略、saveSettings 落盘前剔除，避免残留写回 data.json */
+const DEPRECATED_KEYS = ['profileMode', 'profiles', 'rules', 'singleHomepage', 'restoreLastSession'];
+
 /* ---------------- i18n ---------------- */
 
 const I18N = {
@@ -25,196 +29,86 @@ const I18N = {
     btn_browse: '浏览',
     modal_pick_file: '选择笔记文件（输入过滤）',
     cmd_open: '启动台：打开主页',
-    cmd_open_profile: '启动台：打开指定组合…',
     cmd_restore_session: '启动台：恢复上次会话',
     ribbon: '启动台',
 
     setting_title: 'XU Homepages（启动台）',
-    setting_header_desc: '启动台插件：接管 Obsidian 的启动行为——支持单主页、多笔记组合布局主页、按星期与时间段条件路由，并可恢复上次关闭的会话。',
+    setting_header_desc: '启动台插件：接管 Obsidian 的启动行为——启动时打开主页或恢复上次会话，新标签页直达主页。',
     setting_language: '界面语言',
     setting_language_desc: '切换中文 / English',
-    setting_restore_session: '恢复上次关闭的所有文件',
-    setting_restore_session_desc: '开启后，启动时重新打开上次关闭的全部文件（优先于主页）；关闭时启动只打开主页，其余文件全部不打开；默认关闭',
+    setting_homepage: '主页文件',
+    setting_homepage_desc: '启动与新标签页打开的单一主页文件',
+    homepage_ph: 'vault 内路径，如 home.md',
+    setting_behavior: '启动行为',
+    setting_behavior_desc: '启动时打开主页（默认）或恢复上次关闭的会话，二选一',
+    behavior_homepage: '打开主页',
+    behavior_restore: '恢复上次会话',
     setting_new_tab: '新标签页打开主页',
-    setting_new_tab_desc: '开启后，点击标签栏「+」或 Ctrl+T 新建标签页时，直接打开主页（单主页；未配置则用默认组合第一项）；默认开启',
-    section_single: '单主页',
-    single_enable: '开启单主页',
-    single_enable_desc: '启动时只打开这一个主页文件',
-    single_target: '主页文件',
-    section_profile: '组合主页',
-    profile_enable: '开启组合主页',
-    profile_enable_desc: '启动时按下方规则路由打开一组笔记（与单主页互斥）',
-    notice_mutual_single: '组合主页已开启，单主页已自动关闭：只能开单主页或组合主页',
-    notice_mutual_profile: '单主页已开启，组合主页已自动关闭：只能开单主页或组合主页',
-    profile_usage_hint: '组合主页用法：在「启动组合」里添加笔记并把常用组合设为默认；再在「条件规则」里按星期/时间段绑定组合（自上而下取第一条命中的规则，未命中打开默认组合，时间与规则联动）。',
-    err_single_not_set: '请先在设置中选择单主页文件',
-    err_no_mode: '请先在设置中开启单主页或组合主页',
+    setting_new_tab_desc: '开启后，点击标签栏「+」或 Ctrl+T 新建标签页时直接打开主页；关闭标签不受影响；默认开启',
 
     conflict_warning_title: '⚠️ 检测到 Homepage 插件已启用',
     conflict_warning: 'Homepage 插件同样接管启动行为，两者可能互相覆盖。建议只保留其中一个启动接管插件。',
-
-    section_profiles: '启动组合',
-    section_profiles_desc: '启动或手动触发时按顺序打开的一组笔记。规则未命中时打开默认组合。',
-    btn_add_profile: '新建组合',
-    btn_add_item: '添加笔记',
-    profile_name: '组合名称',
-    profile_name_ph: '如：工作日工作台',
-    profile_default: '默认组合',
-    profile_default_desc: '开启后作为默认组合（规则未命中时打开）',
-    profile_unnamed: '未命名组合',
-    item_target: '笔记',
-    item_target_ph: 'vault 内路径，如 Daily/2026-09-08.md',
-    mode_replace: '替换当前页',
-    mode_tab: '新标签页',
-    mode_split: '分屏',
-    mode_window: '独立窗口',
-    pos_main: '主区',
-    pos_left: '左侧栏',
-    pos_right: '右侧栏',
-
-    section_rules: '条件规则',
-    section_rules_desc: '自上而下取第一条命中的规则，把启动路由到对应组合。不选星期 = 每天命中；时间段格式 HH:mm，结束早于开始表示跨夜。',
-    btn_add_rule: '新建规则',
-    rule_weekdays: '星期',
-    rule_weekdays_hint: '不选 = 每天',
-    rule_time: '时间段',
-    rule_time_desc: '格式 HH:mm，留空表示不限',
-    rule_profile: '命中时打开',
-    rule_profile_none: '（未选择）',
 
     setting_docs: '使用文档',
     setting_docs_desc: '在 GitHub 查看完整使用说明',
     btn_github: 'GitHub',
 
     err_file_not_found: '文件不存在：%s',
-    err_no_profile: '没有可打开的组合，请先在设置中创建',
-    err_need_profile: '请先创建启动组合',
-    err_need_default: '请先将某个组合设为默认组合',
+    err_homepage_not_set: '请先在设置中选择主页文件',
     notice_session_empty: '没有可恢复的会话记录',
     notice_session_restored: '已恢复上次会话（%d 个文件）',
-    notice_profile_opened: '已打开组合：%s',
-    modal_pick_profile: '选择要打开的组合',
-    delete: '删除',
+    notice_homepage_renamed: '主页已随文件移动更新：%s',
+    notice_homepage_deleted: '主页文件已被删除，请到设置中重新选择主页',
   },
   en: {
     btn_browse: 'Browse',
     modal_pick_file: 'Choose a note (type to filter)',
     cmd_open: 'Launchpad: open homepage',
-    cmd_open_profile: 'Launchpad: open a profile…',
     cmd_restore_session: 'Launchpad: restore last session',
     ribbon: 'Launchpad',
 
     setting_title: 'XU Homepages',
-    setting_header_desc: 'Launchpad plugin: takes over Obsidian startup behavior — single homepage, multi-note profile layouts, weekday/time-based routing, and last-session restore.',
+    setting_header_desc: 'Launchpad plugin: takes over Obsidian startup — open your homepage or restore the last session on launch, and jump straight to the homepage in every new tab.',
     setting_language: 'Language',
     setting_language_desc: 'Switch Chinese / English',
-    setting_restore_session: 'Restore all files closed last time',
-    setting_restore_session_desc: 'When enabled, reopen all files from the last session on startup (takes priority over homepages); when off, only the homepage opens at startup; off by default',
+    setting_homepage: 'Homepage file',
+    setting_homepage_desc: 'The single homepage opened on startup and in new tabs',
+    homepage_ph: 'vault path, e.g. home.md',
+    setting_behavior: 'Startup behavior',
+    setting_behavior_desc: 'Open the homepage on startup (default) or restore the last session — pick one',
+    behavior_homepage: 'Open homepage',
+    behavior_restore: 'Restore last session',
     setting_new_tab: 'New tab opens homepage',
-    setting_new_tab_desc: 'When enabled, clicking the "+" button or pressing Ctrl+T opens the homepage (single homepage; fallback: first item of the default profile); on by default',
-    section_single: 'Single homepage',
-    single_enable: 'Enable single homepage',
-    single_enable_desc: 'Open only this note on startup',
-    single_target: 'Homepage note',
-    section_profile: 'Profile homepages',
-    profile_enable: 'Enable profile homepages',
-    profile_enable_desc: 'Open a set of notes on startup via the rules below (mutually exclusive with single homepage)',
-    notice_mutual_single: 'Profile homepages enabled — single homepage turned off (only one can be active)',
-    notice_mutual_profile: 'Single homepage enabled — profile homepages turned off (only one can be active)',
-    profile_usage_hint: 'How to use: add notes to a profile below and mark one as default; then bind profiles to rules by weekday/time range (top-down, first match wins; falls back to the default profile).',
-    err_single_not_set: 'Pick a homepage note in settings first',
-    err_no_mode: 'Enable single homepage or profile homepages in settings first',
+    setting_new_tab_desc: 'When enabled, the tab bar "+" button or Ctrl+T opens the homepage; closing tabs is not affected; on by default',
 
     conflict_warning_title: '⚠️ Homepage plugin detected',
     conflict_warning: 'The Homepage plugin also takes over startup behavior and may conflict with this plugin. Keep only one startup plugin enabled.',
-
-    section_profiles: 'Startup profiles',
-    section_profiles_desc: 'A list of notes opened in order on startup or manual trigger. The default profile is used when no rule matches.',
-    btn_add_profile: 'New profile',
-    btn_add_item: 'Add note',
-    profile_name: 'Profile name',
-    profile_name_ph: 'e.g. Workday dashboard',
-    profile_default: 'Default profile',
-    profile_default_desc: 'Use as default profile (opened when no rule matches)',
-    profile_unnamed: 'Untitled profile',
-    item_target: 'Note',
-    item_target_ph: 'vault path, e.g. Daily/2026-09-08.md',
-    mode_replace: 'Replace current',
-    mode_tab: 'New tab',
-    mode_split: 'Split',
-    mode_window: 'Window',
-    pos_main: 'Main area',
-    pos_left: 'Left sidebar',
-    pos_right: 'Right sidebar',
-
-    section_rules: 'Condition rules',
-    section_rules_desc: 'Rules are evaluated top-down; the first match routes startup to its profile. No weekday selected = every day. Time format HH:mm; end before start means overnight.',
-    btn_add_rule: 'New rule',
-    rule_weekdays: 'Weekdays',
-    rule_weekdays_hint: 'none = every day',
-    rule_time: 'Time range',
-    rule_time_desc: 'Format HH:mm, empty means any time',
-    rule_profile: 'Open profile',
-    rule_profile_none: '(none)',
 
     setting_docs: 'Documentation',
     setting_docs_desc: 'View the full usage guide on GitHub',
     btn_github: 'GitHub',
 
     err_file_not_found: 'File not found: %s',
-    err_no_profile: 'No profile available. Create one in settings first.',
-    err_need_profile: 'Create a startup profile first',
-    err_need_default: 'Set one profile as default first',
+    err_homepage_not_set: 'Pick a homepage file in settings first',
     notice_session_empty: 'No session to restore',
     notice_session_restored: 'Last session restored (%d files)',
-    notice_profile_opened: 'Profile opened: %s',
-    modal_pick_profile: 'Choose a profile to open',
-    delete: 'Delete',
+    notice_homepage_renamed: 'Homepage updated to follow the moved file: %s',
+    notice_homepage_deleted: 'The homepage file was deleted — please pick a new homepage in settings',
   },
 };
 
-const WEEKDAY_LABELS = {
-  zh: ['一', '二', '三', '四', '五', '六', '日'],
-  en: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
-};
-
 /* ---------------- 默认设置 ---------------- */
-/* restoreLastSession: 启动时恢复上次关闭的所有文件（默认关，开启后优先于主页）
-   newTabHomepage: 点击「+」/ Ctrl+T 新建标签页时打开主页（默认开）
-   singleHomepage: 单主页 { enabled, target, mode }，与组合主页互斥
-   profileMode: 组合主页开关 { enabled }
-   profiles: [{ id, name, items: [{ target, mode, position }], isDefault }]
-   rules: [{ id, condition: { weekdays: [1-7], timeStart, timeEnd }, profileId }]
-   sessionCache: 上次会话打开的 markdown 路径列表 */
+/* startupBehavior: 'homepage' 启动打开主页（默认）| 'restore-session' 启动恢复上次会话
+   homepage: 单主页 vault 路径
+   newTabHomepage: 「+」/ Ctrl+T 新建标签页时打开主页
+   sessionCache: 上次会话打开的 markdown 路径列表（仅用于「恢复上次会话」） */
 const DEFAULT_SETTINGS = {
   language: 'zh',
-  restoreLastSession: false,
+  startupBehavior: 'homepage',
   newTabHomepage: true,
-  singleHomepage: { enabled: true, target: '', mode: 'replace' },
-  profileMode: { enabled: false },
-  profiles: [],
-  rules: [],
+  homepage: '',
   sessionCache: [],
 };
-
-function uid() {
-  return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
-}
-
-function parseTimeToMinutes(str) {
-  if (!str) return null;
-  const m = /^(\d{1,2}):(\d{2})$/.exec(String(str).trim());
-  if (!m) return null;
-  const h = Number(m[1]);
-  const min = Number(m[2]);
-  if (h > 23 || min > 59) return null;
-  return h * 60 + min;
-}
-
-function arrayRemove(arr, item) {
-  const idx = arr.indexOf(item);
-  if (idx >= 0) arr.splice(idx, 1);
-}
 
 /* ---------------- Modal ---------------- */
 
@@ -243,28 +137,6 @@ class FilePickModal extends FuzzySuggestModal {
   }
 }
 
-
-class ProfilePickModal extends FuzzySuggestModal {
-  constructor(app, plugin, onPick) {
-    super(app);
-    this.plugin = plugin;
-    this.onPick = onPick;
-    this.setPlaceholder(plugin.t('modal_pick_profile'));
-  }
-
-  getItems() {
-    return this.plugin.settings.profiles;
-  }
-
-  getItemText(profile) {
-    return profile.name || profile.id;
-  }
-
-  onChooseItem(profile) {
-    this.onPick(profile);
-  }
-}
-
 /* ---------------- 主插件 ---------------- */
 
 class XuHomepages extends Plugin {
@@ -279,6 +151,7 @@ class XuHomepages extends Plugin {
     this.releaseNotesSkipped = false;
     this.xuLpOrigRunOpeningBehavior = null;
     this.xuLpOrigShowReleaseNotes = null;
+    this.xuLpCommands = {};
 
     // 启动拦截必须在 onload 同步阶段、任何 await 之前打补丁（参考 homepage），
     // 避免 runOpeningBehavior 在设置加载完成前被 Obsidian 调用而漏拦截
@@ -293,25 +166,14 @@ class XuHomepages extends Plugin {
     ribbon.createSpan({ cls: 'xu-homepages-ribbon-icon' }).innerHTML = HOME_SVG;
     this.addSettingTab(new XuHomepagesSettingTab(this.app, this));
 
-    this.addCommand({
+    // 命令名动态刷新：保存 addCommand 返回的命令对象引用，语言切换时更新 name（见 refreshCommandNames）
+    this.xuLpCommands.open = this.addCommand({
       id: 'open',
       name: this.t('cmd_open'),
       callback: () => this.openHomepageManual(),
     });
 
-    this.addCommand({
-      id: 'open-profile',
-      name: this.t('cmd_open_profile'),
-      callback: () => {
-        if (this.settings.profiles.length === 0) {
-          new Notice(this.t('err_no_profile'));
-          return;
-        }
-        new ProfilePickModal(this.app, this, (profile) => this.openProfile(profile, false)).open();
-      },
-    });
-
-    this.addCommand({
+    this.xuLpCommands.restore = this.addCommand({
       id: 'restore-session',
       name: this.t('cmd_restore_session'),
       callback: async () => {
@@ -323,23 +185,40 @@ class XuHomepages extends Plugin {
     // 新标签页打开主页（开关开启时监听 active-leaf-change：新空标签页 → 打开主页）
     this.patchNewTab();
 
-    // 会话采集：layout-change 防抖记录当前打开的 markdown 文件
-    // 官方 load-time 指南：启动期事件注册放 onLayoutReady，不参与启动事件风暴
+    // 会话采集 + 主页文件同步：官方 load-time 指南，启动期事件注册放 onLayoutReady
     this.app.workspace.onLayoutReady(() => {
       this.registerEvent(
         this.app.workspace.on('layout-change', () => {
           if (this.sessionDebounceTimer) clearTimeout(this.sessionDebounceTimer);
           this.sessionDebounceTimer = setTimeout(() => {
             this.sessionDebounceTimer = null;
-            this.captureSession();
+            this.captureSession().catch((e) => console.error(LOG_PREFIX, 'capture session failed', e));
           }, SESSION_DEBOUNCE_MS);
         })
       );
-      // 启动布局（含组合打开）多发生在注册之前，布局就绪后补一次初始快照
+      // 启动布局多发生在注册之前，布局就绪后补一次初始快照
       this.sessionDebounceTimer = setTimeout(() => {
         this.sessionDebounceTimer = null;
-        this.captureSession();
+        this.captureSession().catch((e) => console.error(LOG_PREFIX, 'capture session failed', e));
       }, SESSION_DEBOUNCE_MS);
+
+      // 记忆卫生：主页文件被移动/删除时同步设置并提示（registerEvent 自动清理）
+      this.registerEvent(
+        this.app.vault.on('rename', (file, oldPath) => {
+          if (!(file instanceof TFile) || oldPath !== this.settings.homepage) return;
+          this.settings.homepage = file.path;
+          this.saveSettings().catch((e) => console.error(LOG_PREFIX, 'save after rename failed', e));
+          new Notice(this.t('notice_homepage_renamed').replace('%s', file.path));
+        })
+      );
+      this.registerEvent(
+        this.app.vault.on('delete', (file) => {
+          if (!(file instanceof TFile) || file.path !== this.settings.homepage) return;
+          this.settings.homepage = '';
+          this.saveSettings().catch((e) => console.error(LOG_PREFIX, 'save after delete failed', e));
+          new Notice(this.t('notice_homepage_deleted'));
+        })
+      );
     });
 
     if (this.isHomepageEnabled()) {
@@ -353,7 +232,10 @@ class XuHomepages extends Plugin {
       this.sessionDebounceTimer = null;
     }
     try {
-      this.captureSession(); // onunload 兜底落盘（覆盖崩溃前的最后状态）
+      // 卸载兜底：同步刷新会话快照到内存后立即落盘。onunload 无法 await，
+      // saveData 的文件写入由存活的 Obsidian 进程完成；防抖已压至 300ms，崩溃丢失窗口极小。
+      this.updateSessionCache();
+      this.saveSettings().catch((e) => console.error(LOG_PREFIX, 'final save failed', e));
     } catch (e) {
       console.error(LOG_PREFIX, 'final session capture failed', e);
     }
@@ -362,68 +244,105 @@ class XuHomepages extends Plugin {
   }
 
   async loadSettings() {
-    const data = await this.loadData();
-    this.settings = Object.assign({}, DEFAULT_SETTINGS, data || {});
-    this.settings.singleHomepage = Object.assign({}, DEFAULT_SETTINGS.singleHomepage, this.settings.singleHomepage || {});
-    this.settings.profileMode = Object.assign({}, DEFAULT_SETTINGS.profileMode, this.settings.profileMode || {});
-    if (!Array.isArray(this.settings.profiles)) this.settings.profiles = [];
-    if (!Array.isArray(this.settings.rules)) this.settings.rules = [];
-    if (!Array.isArray(this.settings.sessionCache)) this.settings.sessionCache = [];
+    const saved = (await this.loadData()) || {};
+    // v1.x 多主页字段（profileMode/profiles/rules 等）直接忽略，不做迁移；
+    // 唯一兼容读取：旧版单主页结构 singleHomepage.target（语义相同的一行兜底，避免升级后主页丢失）
+    const legacyTarget = saved.singleHomepage && typeof saved.singleHomepage.target === 'string'
+      ? saved.singleHomepage.target : '';
+    this.settings = {
+      language: typeof saved.language === 'string' ? saved.language : DEFAULT_SETTINGS.language,
+      startupBehavior: saved.startupBehavior === 'restore-session' ? 'restore-session' : 'homepage',
+      newTabHomepage: typeof saved.newTabHomepage === 'boolean' ? saved.newTabHomepage : DEFAULT_SETTINGS.newTabHomepage,
+      homepage: typeof saved.homepage === 'string' && saved.homepage ? saved.homepage : legacyTarget,
+      sessionCache: Array.isArray(saved.sessionCache) ? saved.sessionCache : [],
+    };
   }
 
   async saveSettings() {
+    // 落盘仲裁：写盘前先读磁盘做 union 合并——已知键以内存为准，
+    // 磁盘上多出的未知新键拉入（防另一端写入的设置被整体覆盖），
+    // v1.x 废弃键剔除（防旧 data.json 残留字段被合并回写）。
+    let merged;
+    try {
+      const disk = (await this.loadData()) || {};
+      merged = Object.assign({}, disk, this.settings);
+    } catch (e) {
+      console.warn(LOG_PREFIX, 'read disk settings for merge failed', e);
+      merged = this.settings;
+    }
+    for (const k of DEPRECATED_KEYS) delete merged[k];
+    this.settings = merged;
     await this.saveData(this.settings);
+  }
+
+  /* 语言切换后即时刷新命令面板中的命令名（命令对象引用可变，无需重注册） */
+  refreshCommandNames() {
+    if (this.xuLpCommands.open) this.xuLpCommands.open.name = this.t('cmd_open');
+    if (this.xuLpCommands.restore) this.xuLpCommands.restore.name = this.t('cmd_restore_session');
   }
 
   /* ---------- 新标签页打开主页 ---------- */
 
-  /* 监听 active-leaf-change：新出现的空标签页（+/Ctrl+T/命令面板通用）→ 打开主页。
-     用已见 leaf 集合防重复；registerEvent 自动清理，无需手动 unpatch */
+  /* 监听 active-leaf-change：新出现的空标签页（标签栏「+」/ Ctrl+T）→ 打开主页。
+
+     🔴 劫持判定（修复「关闭最后一个标签也被劫持成主页」）：
+     1) 仅主区（rootSplit）leaf 且 view 为 empty 才是候选；侧栏空 leaf 不碰；
+     2) layout-change 里检测主区 leaf 数量减少（用户关闭标签/合并分屏）→ 打开
+        CLOSE_SUPPRESS_MS 抑制窗口。关键场景：关闭最后一个标签后 Obsidian 会
+        补一个新的空 leaf 并激活，若不抑制，这个被动出现的空 leaf 会被误判为
+        「新建标签」而弹出主页；
+     3) active-leaf-change 与 layout-change 的先后顺序不保证，故劫持动作延迟
+        REDIRECT_DELAY_MS 再决策，给 layout-change 到达并打开抑制窗口留时间；
+     4) 已见 leaf 集合防重复处理与劫持循环；layout-change 顺带清理已 detach
+        的 leaf，防集合持有已销毁对象。 */
   patchNewTab() {
     this.xuLpSeenEmptyLeaves = new Set();
+    this.xuLpMainLeafCount = -1;
+    this.xuLpSuppressUntil = 0;
     this.app.workspace.onLayoutReady(() => {
       for (const leaf of this.app.workspace.getLeavesOfType('empty')) {
-        this.xuLpSeenEmptyLeaves.add(leaf); // 存量空标签页不算「新出现」
+        if (this.collectMainLeaves().includes(leaf)) this.xuLpSeenEmptyLeaves.add(leaf); // 存量空标签页不算「新出现」
       }
-      this.registerEvent(
-        this.app.workspace.on('active-leaf-change', (leaf) => {
-          this.handleNewTabLeaf(leaf);
-        })
-      );
+      this.xuLpMainLeafCount = this.collectMainLeaves().length;
+      this.registerEvent(this.app.workspace.on('layout-change', () => this.noteLayoutChange()));
+      this.registerEvent(this.app.workspace.on('active-leaf-change', (leaf) => this.handleNewTabLeaf(leaf)));
     });
   }
 
+  noteLayoutChange() {
+    const mainLeaves = this.collectMainLeaves();
+    if (this.xuLpMainLeafCount >= 0 && mainLeaves.length < this.xuLpMainLeafCount) {
+      // 主区 leaf 数量减少 = 关闭标签 / 合并分屏（含关闭最后一个标签的时序）
+      this.xuLpSuppressUntil = Date.now() + CLOSE_SUPPRESS_MS;
+    }
+    this.xuLpMainLeafCount = mainLeaves.length;
+    for (const leaf of this.xuLpSeenEmptyLeaves) {
+      if (!mainLeaves.includes(leaf)) this.xuLpSeenEmptyLeaves.delete(leaf); // 清理已 detach 的 leaf
+    }
+  }
+
   handleNewTabLeaf(leaf) {
-    if (!this.settings?.newTabHomepage) return;
+    if (!this.settings?.newTabHomepage || !this.settings?.homepage) return;
     if (!leaf || !leaf.view || leaf.view.getViewType() !== 'empty') return;
     if (!this.collectMainLeaves().includes(leaf)) return; // 侧栏空 leaf 不劫持
     if (this.xuLpSeenEmptyLeaves.has(leaf)) return;
-    this.xuLpSeenEmptyLeaves.add(leaf); // 先标记防循环
-    const target = this.getNewTabTarget();
-    if (!target) return;
-    const file = this.app.vault.getAbstractFileByPath(target);
-    if (!(file instanceof TFile)) {
-      new Notice(this.t('err_file_not_found').replace('%s', target));
-      return;
-    }
-    leaf.openFile(file).catch((e) => console.error(LOG_PREFIX, 'new-tab open homepage failed', e));
+    this.xuLpSeenEmptyLeaves.add(leaf); // 先标记防循环/防重复
+    // 延迟决策：等 layout-change 先到（关闭标签会打开抑制窗口）再决定是否重定向
+    setTimeout(() => {
+      if (Date.now() < this.xuLpSuppressUntil) return; // 判定为关闭标签产生的被动空 leaf，放行不劫持
+      if (!leaf.view || leaf.view.getViewType() !== 'empty') return; // 期间已被打开/关闭
+      if (!this.collectMainLeaves().includes(leaf)) return;
+      const target = this.settings.homepage;
+      const file = this.app.vault.getAbstractFileByPath(target);
+      if (!(file instanceof TFile)) {
+        new Notice(this.t('err_file_not_found').replace('%s', target));
+        return;
+      }
+      leaf.openFile(file).catch((e) => console.error(LOG_PREFIX, 'new-tab open homepage failed', e));
+    }, REDIRECT_DELAY_MS);
   }
 
-  /* 新标签页的目标：单主页优先，未配置时回退默认组合第一项 */
-  getNewTabTarget() {
-    const s = this.settings;
-    if (!s) return null;
-    if (s.singleHomepage?.enabled && s.singleHomepage.target) return s.singleHomepage.target;
-    if (s.profileMode?.enabled) {
-      const profiles = Array.isArray(s.profiles) ? s.profiles : [];
-      const def = profiles.find((p) => p.isDefault) || profiles[0];
-      const item = (def?.items || []).find((it) => it.target);
-      return item ? item.target : null;
-    }
-    return null;
-  }
-
-  /* ---------- 启动拦截（抄 homepage 的 runOpeningBehavior 重写） ---------- */
+  /* ---------- 启动拦截（参考 homepage 的 runOpeningBehavior 重写） ---------- */
 
   patchOpeningBehaviour() {
     this.xuLpOrigRunOpeningBehavior = this.app.runOpeningBehavior;
@@ -437,7 +356,7 @@ class XuHomepages extends Plugin {
           console.error(LOG_PREFIX, 'startup open failed', e);
         }
         if (handled) {
-          this.openedStartupLayout = true;
+          // 已接管启动：不再调用原版，避免原生再打开上次文件/欢迎页
         } else {
           await this.xuLpOrigRunOpeningBehavior.call(this.app, path);
         }
@@ -476,7 +395,7 @@ class XuHomepages extends Plugin {
     if (!this.settings) return false; // 补丁先于设置加载时兜底
     if (this.hasUrlParams()) return false; // obsidian:// 带打开参数时不抢启动
     this.xuLpStartupLeaves = new Set(); // 记录本次启动打开的 leaf，供清屏保留
-    if (this.settings.restoreLastSession) {
+    if (this.settings.startupBehavior === 'restore-session') {
       const cached = (this.settings.sessionCache || []).filter(
         (p) => this.app.vault.getAbstractFileByPath(p) instanceof TFile
       );
@@ -484,19 +403,10 @@ class XuHomepages extends Plugin {
       await this.closeMainLeaves(null); // 先清空主区，避免与原生恢复的文件重复
       return await this.restoreSession(true);
     }
-    const single = this.settings.singleHomepage;
-    if (single && single.enabled && single.target) {
-      const ok = await this.openSingle(true);
+    if (this.settings.homepage) {
+      const ok = await this.openHomepage();
       if (ok) await this.closeMainLeaves(this.xuLpStartupLeaves); // 只留主页，其余全关
       return ok;
-    }
-    if (this.settings.profileMode && this.settings.profileMode.enabled) {
-      const profile = this.resolveProfile();
-      if (profile) {
-        const ok = await this.openProfile(profile, true);
-        if (ok) await this.closeMainLeaves(this.xuLpStartupLeaves);
-        return ok;
-      }
     }
     return false; // 未配置 → 交还原版行为
   }
@@ -534,104 +444,29 @@ class XuHomepages extends Plugin {
     }
   }
 
-  /* ---------- 条件路由引擎 ---------- */
-
-  resolveProfile() {
-    const ruleProfileId = this.matchRule();
-    if (ruleProfileId) {
-      const hit = this.settings.profiles.find((p) => p.id === ruleProfileId);
-      if (hit) return hit;
-    }
-    return this.settings.profiles.find((p) => p.isDefault) || null;
-  }
-
-  matchRule() {
-    const now = new Date();
-    const day = now.getDay() === 0 ? 7 : now.getDay(); // 1=周一 … 7=周日
-    const minutes = now.getHours() * 60 + now.getMinutes();
-
-    for (const rule of this.settings.rules) {
-      const cond = rule.condition || {};
-      if (!rule.profileId) continue; // 未绑定组合的规则跳过
-      const weekdays = Array.isArray(cond.weekdays) ? cond.weekdays : [];
-      if (weekdays.length > 0 && !weekdays.includes(day)) continue;
-      const start = parseTimeToMinutes(cond.timeStart);
-      const end = parseTimeToMinutes(cond.timeEnd);
-      if (start !== null && end !== null) {
-        const inRange = start <= end
-          ? minutes >= start && minutes <= end
-          : minutes >= start || minutes <= end; // 跨夜
-        if (!inRange) continue;
-      }
-      return rule.profileId;
-    }
-    return null;
-  }
-
   /* ---------- 主页打开 / 会话恢复 ---------- */
 
   async openHomepageManual() {
-    const s = this.settings;
-    if (s.singleHomepage && s.singleHomepage.enabled) {
-      if (!s.singleHomepage.target) {
-        new Notice(this.t('err_single_not_set'));
-        return;
-      }
-      await this.openSingle(false);
+    if (!this.settings.homepage) {
+      new Notice(this.t('err_homepage_not_set'));
       return;
     }
-    if (s.profileMode && s.profileMode.enabled) {
-      const profile = this.resolveProfile();
-      if (profile) {
-        await this.openProfile(profile, false);
-        return;
-      }
-      if (s.profiles.length === 0) new Notice(this.t('err_no_profile'));
-      else new Notice(this.t('err_need_default'));
-      return;
-    }
-    new Notice(this.t('err_no_mode'));
+    await this.openHomepage();
   }
 
-  async openSingle(quiet = true) {
-    const cfg = this.settings.singleHomepage || {};
-    if (!cfg.target) return false;
-    return await this.openItem({ target: cfg.target, mode: cfg.mode || 'replace', position: 'main' });
-  }
-
-  async openProfile(profile, quiet = true) {
-    let opened = 0;
-    const items = profile.items || [];
-    for (const item of items) {
-      try {
-        if (await this.openItem(item)) opened++;
-      } catch (e) {
-        console.error(LOG_PREFIX, 'open item failed', item, e);
-      }
-    }
-    if (!quiet && opened > 0) {
-      new Notice(this.t('notice_profile_opened').replace('%s', profile.name || profile.id));
-    }
-    return opened > 0;
-  }
-
-  async openItem(item) {
-    const af = this.app.vault.getAbstractFileByPath(item.target);
-    if (!(af instanceof TFile)) {
-      new Notice(this.t('err_file_not_found').replace('%s', item.target || ''));
+  /* 打开单一主页：替换当前标签（getLeaf(false) 无 window/split，移动端安全）；
+     启动调用时把 leaf 记入 xuLpStartupLeaves 供清屏保留 */
+  async openHomepage() {
+    const target = this.settings.homepage;
+    if (!target) return false;
+    const file = this.app.vault.getAbstractFileByPath(target);
+    if (!(file instanceof TFile)) {
+      new Notice(this.t('err_file_not_found').replace('%s', target));
       return false;
     }
-    let leaf;
-    if (item.position === 'left') {
-      leaf = this.app.workspace.getLeftLeaf(true);
-    } else if (item.position === 'right') {
-      leaf = this.app.workspace.getRightLeaf(true);
-    } else {
-      const mode = ALLOWED_MODES.includes(item.mode) ? item.mode : 'tab';
-      leaf = this.app.workspace.getLeaf(mode === 'replace' ? false : mode);
-    }
-    await leaf.openFile(af);
-    if (this.xuLpStartupLeaves) this.xuLpStartupLeaves.add(leaf); // 启动清屏时保留
+    const leaf = this.app.workspace.getLeaf(false);
+    await leaf.openFile(file);
+    if (this.xuLpStartupLeaves) this.xuLpStartupLeaves.add(leaf);
     return true;
   }
 
@@ -655,8 +490,9 @@ class XuHomepages extends Plugin {
     return opened > 0;
   }
 
-  captureSession() {
-    if (!this.app.workspace) return;
+  /* 同步刷新内存中的会话快照，返回是否有变化 */
+  updateSessionCache() {
+    if (!this.app.workspace) return false;
     const paths = [];
     for (const leaf of this.collectMainLeaves()) { // 仅主区：侧栏文件不进会话缓存
       const view = leaf.view;
@@ -666,7 +502,14 @@ class XuHomepages extends Plugin {
     }
     if (JSON.stringify(paths) !== JSON.stringify(this.settings.sessionCache || [])) {
       this.settings.sessionCache = paths;
-      void this.saveSettings();
+      return true;
+    }
+    return false;
+  }
+
+  async captureSession() {
+    if (this.updateSessionCache()) {
+      await this.saveSettings(); // 有变化才落盘（union 合并见 saveSettings）
     }
   }
 
@@ -710,21 +553,45 @@ class XuHomepagesSettingTab extends PluginSettingTab {
           .onChange(async (v) => {
             plugin.settings.language = v;
             await plugin.saveSettings();
+            plugin.refreshCommandNames(); // 命令面板中的命令名随语言即时刷新
             this.display();
           }));
 
-    // 恢复上次关闭的所有文件（默认关，开启后优先于主页）
+    // 主页文件（文本 + 浏览选择）
     new Setting(containerEl)
-      .setName(this.t('setting_restore_session'))
-      .setDesc(this.t('setting_restore_session_desc'))
-      .addToggle((tg) =>
-        tg.setValue(!!plugin.settings.restoreLastSession)
+      .setName(this.t('setting_homepage'))
+      .setDesc(this.t('setting_homepage_desc'))
+      .addText((text) => {
+        text.setPlaceholder(this.t('homepage_ph')).setValue(plugin.settings.homepage || '');
+        text.inputEl.addEventListener('change', async () => {
+          plugin.settings.homepage = text.inputEl.value.trim();
+          await plugin.saveSettings();
+        });
+        return text;
+      })
+      .addButton((btn) =>
+        btn.setIcon('file-search').setTooltip(this.t('btn_browse')).onClick(() => {
+          new FilePickModal(this.app, plugin, async (path) => {
+            plugin.settings.homepage = path;
+            await plugin.saveSettings();
+            this.display();
+          }).open();
+        }));
+
+    // 启动行为：打开主页（默认）/ 恢复上次会话，二选一
+    new Setting(containerEl)
+      .setName(this.t('setting_behavior'))
+      .setDesc(this.t('setting_behavior_desc'))
+      .addDropdown((dd) =>
+        dd.addOption('homepage', this.t('behavior_homepage'))
+          .addOption('restore-session', this.t('behavior_restore'))
+          .setValue(plugin.settings.startupBehavior === 'restore-session' ? 'restore-session' : 'homepage')
           .onChange(async (v) => {
-            plugin.settings.restoreLastSession = v;
+            plugin.settings.startupBehavior = v;
             await plugin.saveSettings();
           }));
 
-    // 新标签页打开主页（默认关，开启后「+」/Ctrl+T 打开主页）
+    // 新标签页打开主页（默认开，开启后「+」/Ctrl+T 打开主页，关闭标签不受影响）
     new Setting(containerEl)
       .setName(this.t('setting_new_tab'))
       .setDesc(this.t('setting_new_tab_desc'))
@@ -742,120 +609,6 @@ class XuHomepagesSettingTab extends PluginSettingTab {
       warn.createDiv({ cls: 'xu-homepages-warning-body', text: this.t('conflict_warning') });
     }
 
-    // ===== 单主页 =====
-    new Setting(containerEl).setName(this.t('section_single')).setHeading();
-    new Setting(containerEl)
-      .setName(this.t('single_enable'))
-      .setDesc(this.t('single_enable_desc'))
-      .addToggle((tg) =>
-        tg.setValue(!!plugin.settings.singleHomepage.enabled)
-          .onChange(async (v) => {
-            if (v && plugin.settings.profileMode.enabled) {
-              plugin.settings.profileMode.enabled = false;
-              new Notice(this.t('notice_mutual_profile'));
-            }
-            plugin.settings.singleHomepage.enabled = v;
-            await plugin.saveSettings();
-            this.display();
-          }));
-    new Setting(containerEl)
-      .setName(this.t('single_target'))
-      .addText((text) => {
-        text.setPlaceholder(this.t('item_target_ph')).setValue(plugin.settings.singleHomepage.target || '');
-        text.inputEl.addEventListener('change', async () => {
-          plugin.settings.singleHomepage.target = text.inputEl.value.trim();
-          await plugin.saveSettings();
-        });
-        return text;
-      })
-      .addButton((btn) =>
-        btn.setIcon('file-search').setTooltip(this.t('btn_browse')).onClick(() => {
-          new FilePickModal(this.app, plugin, async (path) => {
-            plugin.settings.singleHomepage.target = path;
-            await plugin.saveSettings();
-            this.display();
-          }).open();
-        }))
-      .addDropdown((dd) =>
-        dd.addOption('replace', this.t('mode_replace'))
-          .addOption('tab', this.t('mode_tab'))
-          .addOption('split', this.t('mode_split'))
-          .addOption('window', this.t('mode_window'))
-          .setValue(ALLOWED_MODES.includes(plugin.settings.singleHomepage.mode) ? plugin.settings.singleHomepage.mode : 'replace')
-          .onChange(async (v) => {
-            plugin.settings.singleHomepage.mode = v;
-            await plugin.saveSettings();
-          }));
-
-    // ===== 组合主页 =====
-    new Setting(containerEl).setName(this.t('section_profile')).setHeading();
-    if (plugin.settings.profileMode.enabled) {
-      const usage = containerEl.createDiv('xu-homepages-hint');
-      usage.createSpan({ text: this.t('profile_usage_hint') });
-    }
-    new Setting(containerEl)
-      .setName(this.t('profile_enable'))
-      .setDesc(this.t('profile_enable_desc'))
-      .addToggle((tg) =>
-        tg.setValue(!!plugin.settings.profileMode.enabled)
-          .onChange(async (v) => {
-            if (v && plugin.settings.singleHomepage.enabled) {
-              plugin.settings.singleHomepage.enabled = false;
-              new Notice(this.t('notice_mutual_single'));
-            }
-            plugin.settings.profileMode.enabled = v;
-            await plugin.saveSettings();
-            this.display();
-          }));
-
-    // ===== 启动组合 / 条件规则（仅组合主页开启时显示，保持设置页简洁）=====
-    if (plugin.settings.profileMode.enabled) {
-    new Setting(containerEl).setName(this.t('section_profiles')).setHeading();
-    const profilesDesc = containerEl.createDiv('setting-item-description');
-    profilesDesc.setText(this.t('section_profiles_desc'));
-
-    for (const profile of plugin.settings.profiles) {
-      this.renderProfile(containerEl, profile);
-    }
-
-    new Setting(containerEl).addButton((btn) =>
-      btn.setButtonText(this.t('btn_add_profile')).setCta().onClick(async () => {
-        plugin.settings.profiles.push({
-          id: uid(),
-          name: this.t('profile_unnamed') + ' ' + (plugin.settings.profiles.length + 1),
-          items: [],
-          isDefault: plugin.settings.profiles.length === 0, // 首个组合自动设为默认
-        });
-        await plugin.saveSettings();
-        this.display();
-      }));
-
-    // ===== 条件规则 =====
-    new Setting(containerEl).setName(this.t('section_rules')).setHeading();
-    const rulesDesc = containerEl.createDiv('setting-item-description');
-    rulesDesc.setText(this.t('section_rules_desc'));
-
-    for (const rule of plugin.settings.rules) {
-      this.renderRule(containerEl, rule);
-    }
-
-    new Setting(containerEl).addButton((btn) =>
-      btn.setButtonText(this.t('btn_add_rule')).setCta().onClick(async () => {
-        if (plugin.settings.profiles.length === 0) {
-          new Notice(this.t('err_need_profile'));
-          return;
-        }
-        plugin.settings.rules.push({
-          id: uid(),
-          condition: { weekdays: [], timeStart: '', timeEnd: '' },
-          profileId: '',
-        });
-        await plugin.saveSettings();
-        this.display();
-      }));
-
-    } // end 组合主页配置区（profileMode.enabled）
-
     // ===== GitHub 使用文档（与其他插件统一格式）=====
     containerEl.createEl('hr', { cls: 'xu-homepages-divider' });
     new Setting(containerEl)
@@ -864,156 +617,6 @@ class XuHomepagesSettingTab extends PluginSettingTab {
       .addButton((btn) =>
         btn.setButtonText(this.t('btn_github')).onClick(() => {
           window.open(REPO_URL, '_blank');
-        }));
-  }
-
-  renderProfile(containerEl, profile) {
-    const plugin = this.plugin;
-    if (!Array.isArray(profile.items)) profile.items = [];
-    const card = containerEl.createDiv('xu-homepages-card');
-
-    new Setting(card)
-      .setName(this.t('profile_name'))
-      .setDesc(this.t('profile_default_desc'))
-      .addText((text) =>
-        text.setPlaceholder(this.t('profile_name_ph'))
-          .setValue(profile.name || '')
-          .onChange(async (v) => {
-            profile.name = v;
-            await plugin.saveSettings();
-          }))
-      .addToggle((tg) =>
-        tg.setTooltip(this.t('profile_default'))
-          .setValue(!!profile.isDefault)
-          .onChange(async (v) => {
-            if (v) plugin.settings.profiles.forEach((p) => { p.isDefault = false; });
-            profile.isDefault = v;
-            await plugin.saveSettings();
-            this.display();
-          }))
-      .addButton((btn) =>
-        btn.setIcon('trash-2').setTooltip(this.t('delete')).onClick(async () => {
-          arrayRemove(plugin.settings.profiles, profile);
-          await plugin.saveSettings();
-          this.display();
-        }));
-
-    profile.items.forEach((item, index) => {
-      new Setting(card)
-        .setName(this.t('item_target') + ' ' + (index + 1))
-        .addText((text) => {
-          text.setPlaceholder(this.t('item_target_ph')).setValue(item.target || '');
-          text.inputEl.addEventListener('change', async () => {
-            item.target = text.inputEl.value.trim();
-            await plugin.saveSettings();
-          });
-          return text;
-        })
-        .addButton((btn) =>
-          btn.setIcon('file-search').setTooltip(this.t('btn_browse')).onClick(() => {
-            new FilePickModal(this.app, plugin, async (path) => {
-              item.target = path;
-              await plugin.saveSettings();
-              this.display();
-            }).open();
-          }))
-        .addDropdown((dd) =>
-          dd.addOption('replace', this.t('mode_replace'))
-            .addOption('tab', this.t('mode_tab'))
-            .addOption('split', this.t('mode_split'))
-            .addOption('window', this.t('mode_window'))
-            .setValue(ALLOWED_MODES.includes(item.mode) ? item.mode : 'tab')
-            .onChange(async (v) => {
-              item.mode = v;
-              await plugin.saveSettings();
-            }))
-        .addDropdown((dd) =>
-          dd.addOption('main', this.t('pos_main'))
-            .addOption('left', this.t('pos_left'))
-            .addOption('right', this.t('pos_right'))
-            .setValue(ALLOWED_POSITIONS.includes(item.position) ? item.position : 'main')
-            .onChange(async (v) => {
-              item.position = v;
-              await plugin.saveSettings();
-            }))
-        .addButton((btn) =>
-          btn.setIcon('trash-2').setTooltip(this.t('delete')).onClick(async () => {
-            arrayRemove(profile.items, item);
-            await plugin.saveSettings();
-            this.display();
-          }));
-    });
-
-    new Setting(card).addButton((btn) =>
-      btn.setButtonText(this.t('btn_add_item')).onClick(async () => {
-        profile.items.push({ target: '', mode: 'tab', position: 'main' });
-        await plugin.saveSettings();
-        this.display();
-      }));
-  }
-
-  renderRule(containerEl, rule) {
-    const plugin = this.plugin;
-    if (!rule.condition) rule.condition = { weekdays: [], timeStart: '', timeEnd: '' };
-    if (!Array.isArray(rule.condition.weekdays)) rule.condition.weekdays = [];
-    const cond = rule.condition;
-    const card = containerEl.createDiv('xu-homepages-card');
-
-    // 星期多选 chips（不选 = 每天）
-    const daysRow = card.createDiv('xu-homepages-weekdays');
-    daysRow.createSpan({ cls: 'xu-homepages-weekdays-label', text: this.t('rule_weekdays') });
-    const labels = WEEKDAY_LABELS[plugin.settings.language] || WEEKDAY_LABELS.zh;
-    for (let day = 1; day <= 7; day++) {
-      const chip = daysRow.createEl('button', { cls: 'xu-homepages-day-chip', text: labels[day - 1] });
-      chip.setAttribute('type', 'button');
-      if (cond.weekdays.includes(day)) chip.addClass('is-active');
-      chip.addEventListener('click', async () => {
-        if (cond.weekdays.includes(day)) arrayRemove(cond.weekdays, day);
-        else cond.weekdays.push(day);
-        cond.weekdays.sort((a, b) => a - b);
-        chip.toggleClass('is-active', cond.weekdays.includes(day));
-        await plugin.saveSettings();
-      });
-    }
-    daysRow.createSpan({ cls: 'xu-homepages-hint', text: this.t('rule_weekdays_hint') });
-
-    // 时间段
-    new Setting(card)
-      .setName(this.t('rule_time'))
-      .setDesc(this.t('rule_time_desc'))
-      .addText((text) => {
-        text.setPlaceholder('08:30').setValue(cond.timeStart || '');
-        text.inputEl.addEventListener('change', async () => {
-          cond.timeStart = text.inputEl.value.trim();
-          await plugin.saveSettings();
-        });
-        return text;
-      })
-      .addText((text) => {
-        text.setPlaceholder('18:00').setValue(cond.timeEnd || '');
-        text.inputEl.addEventListener('change', async () => {
-          cond.timeEnd = text.inputEl.value.trim();
-          await plugin.saveSettings();
-        });
-        return text;
-      });
-
-    // 命中时打开的组合
-    new Setting(card)
-      .setName(this.t('rule_profile'))
-      .addDropdown((dd) => {
-        dd.addOption('', this.t('rule_profile_none'));
-        plugin.settings.profiles.forEach((p) => dd.addOption(p.id, p.name || p.id));
-        dd.setValue(rule.profileId || '').onChange(async (v) => {
-          rule.profileId = v;
-          await plugin.saveSettings();
-        });
-      })
-      .addButton((btn) =>
-        btn.setIcon('trash-2').setTooltip(this.t('delete')).onClick(async () => {
-          arrayRemove(plugin.settings.rules, rule);
-          await plugin.saveSettings();
-          this.display();
         }));
   }
 }
